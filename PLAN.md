@@ -75,6 +75,13 @@ Markers: `[x]` acceptance test passes · `[ ]` open · `[CANCELLED owner 2026-10
 
 ## 5. Dependency order
 
+### Autonomous DEV completion — 2026-10-25
+
+Starting main: `92d89e3f6f922aa81bbaeed954a3276e169aa481` (T5.2 already merged; #29 closed).
+Wave 1: #43 (slot A), genuinely blind #35 (slot B), #28 (slot C), coordinator verification/reconciliation (slot D).
+Then follow `docs/dispatch-plan.md`: independent verification before closure, exact acceptance and full suite on integrated main, one PR per task, PLAN/PROGRESS updated together after each merge.
+No Modal execution: skill/PLAN prohibit it and the budget is owner-only; small synthetic checks stay local. Undefined scientific rules remain BLOCKED, never guessed.
+
 ```text
 M0 T0.5 ─► V0
 M1 (done) ─► V1

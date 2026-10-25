@@ -82,3 +82,10 @@
 
 ## 2026-10-26 — Session 2 (Orchestrator)
 - T5.2 (#29) merged from `origin/t5.2-dsr-bootstrap-alpha` (commit `647d4ad`): DSR, stationary block bootstrap, HAC beta-adjusted alpha (`11 passed` in `test_stats.py`, `186 passed` full suite).
+
+## 2026-10-25 — Sol autonomous DEV completion
+- Starting main SHA: `92d89e3f6f922aa81bbaeed954a3276e169aa481`. Existing CI branch/checkout preserved; coordinator uses `/tmp/opencode/tycho-main`. Remote T5.2 already integrated, not duplicated.
+- Wave 1: isolated writers for #43, genuinely blind #35, #28; coordinator owns records and independent verification. Maximum four sessions including coordinator.
+- Baseline integrated-main suite: `uv run pytest -q` → `186 passed in 49.45s`.
+- #28 worker found undefined null/baseline semantics and opened owner decision #46; no code guessed. Independent #30 dispatched instead. Modal remains out of scope under skill/PLAN; local synthetic computations only.
+- V0 (#7) FAIL: locked-worktree double-force deletion contradicts #4; archive git reads ignore failure. Focused implementation blocker #48 opened; no cleanup executed on active worktrees.
