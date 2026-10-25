@@ -210,6 +210,7 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
   - **Depends on:** T2.1 [#12](https://github.com/ddawnlll/tycho/issues/12), T2.2 [#13](https://github.com/ddawnlll/tycho/issues/13), T2.3 [#14](https://github.com/ddawnlll/tycho/issues/14)
 
 #- [ ] T2.4 M2 verifier fixes: expert gets copies and enforcement uses pre-call availability; dataset_hash from the as_of-visible data; real feature_code_hash factor cache (5-element key); closed-bar test; stablecoin with volume excluded; empty universe → raise; ewma_cov NaN alignment — `uv run pytest -q tests/test_marketstate.py tests/test_expert_runtime.py tests/test_factors.py`
+- [ ] T2.5 M2 re-verify fixes: FactorFrame cache returns copies / expert gets a copy; ordered feature hash; timeframe validation tests; quality != ok → ABSTAIN — `uv run pytest -q tests/test_marketstate.py tests/test_expert_runtime.py tests/test_factors.py`
 
 ## M3 — EXP-TREND-E001 + portfolio (F3) — [milestone](https://github.com/ddawnlll/tycho/milestone/4)
 

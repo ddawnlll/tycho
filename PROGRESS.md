@@ -62,3 +62,5 @@
 - docs/ledger-spec.md: the zero-crossing rule is a coordinator interpretation (monograph says "include zero-crossing rules" without content); flagged for re-check before prereg.
 
 ### T2.4 merged (121 passed). Note: resolve() now raises on an empty universe, so callers iterating early dates must handle it.
+
+### M2 re-verify (wf_e308b7bb-d25): FAIL → T2.5. All 7 T2.4 fixes confirmed with old-code-failing tests; new major: the factor cache returns its mutable cached FactorFrame (same bypass class). Minors: unordered feature hash, untested timeframe validation, quality flags not enforced.
