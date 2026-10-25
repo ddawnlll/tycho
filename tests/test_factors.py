@@ -148,6 +148,22 @@ def test_different_convention_changes_hash():
     assert span.feature_code_hash == compute_factors(snapshot, names, dict(CONVENTION)).feature_code_hash
 
 
+def test_ewma_cov_diagonal_equals_ewma_vol_squared_with_a_nan_close():
+    rng = np.random.default_rng(13)
+    days = 70
+    common = rng.normal(0.0, 0.02, size=days)
+    closes = 100.0 * np.exp(np.cumsum(common))
+    closes[40] = np.nan  # a gap the pair alignment must ignore, like _ewma_vol
+    snapshot = tiny_snapshot({"AAA": closes, "BBB": closes * 2.0})
+
+    factors = compute_factors(snapshot, ["ewma_vol_60d"], CONVENTION)
+    cov = ewma_cov(snapshot, ["AAA", "BBB"], CONVENTION)
+
+    for iid in ("AAA", "BBB"):
+        vol_squared = factors.values.loc[iid, "ewma_vol_60d"] ** 2
+        assert cov.loc[iid, iid] == pytest.approx(vol_squared, rel=1e-12)
+
+
 def test_ewma_cov_diagonal_equals_ewma_vol_squared():
     rng = np.random.default_rng(11)
     days = 70

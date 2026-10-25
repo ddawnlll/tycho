@@ -1,8 +1,9 @@
 """C-03 expert runtime: manifest hashing, isolated resolution, purity checks (08A.3-08A.8)."""
 
+import dataclasses
 import hashlib
 
-from .contracts import ExpertManifest, ExpertSignal, canonical_hash
+from .contracts import ExpertManifest, ExpertSignal, SnapshotRef, canonical_hash
 
 
 def make_manifest(expert_module_source: str, params: dict, **fields) -> ExpertManifest:
@@ -26,15 +27,29 @@ def run_expert(expert, provider, as_of, factor_fn) -> list[ExpertSignal]:
         raise ValueError("expert params changed after manifest hashing")
 
     snapshot = provider.resolve(expert.request(as_of))
-    factor_frame = factor_fn(snapshot)
-    signals = expert.signal(snapshot, factor_frame)
-    _enforce(signals, manifest, snapshot)
+    # Capture before the expert sees the snapshot: an expert that mutates its
+    # arguments must not be able to relax the ABSTAIN rules it is judged by.
+    availability = snapshot.availability.copy()
+    universe = snapshot.universe
+    # The provider's cached snapshot must never leave this function mutable.
+    handoff = _defensive_copy(snapshot)
+    factor_frame = factor_fn(handoff)
+    signals = expert.signal(handoff, factor_frame)
+    _enforce(signals, manifest, snapshot, availability, universe)
     return signals
 
 
-def _enforce(signals, manifest, snapshot) -> None:
+def _defensive_copy(snapshot: SnapshotRef) -> SnapshotRef:
+    return dataclasses.replace(
+        snapshot,
+        bars=snapshot.bars.copy(),
+        availability=snapshot.availability.copy(),
+    )
+
+
+def _enforce(signals, manifest, snapshot, availability, universe) -> None:
     manifest_hash = manifest.manifest_hash()
-    universe = set(snapshot.universe)
+    universe = set(universe)
     seen = set()
     for signal in signals:
         if signal.expert_id != manifest.id:
@@ -52,7 +67,7 @@ def _enforce(signals, manifest, snapshot) -> None:
         if signal.instrument_id in seen:
             raise ValueError(f"more than one signal for {signal.instrument_id!r}")
         seen.add(signal.instrument_id)
-        row = snapshot.availability.loc[signal.instrument_id]
+        row = availability.loc[signal.instrument_id]
         unavailable = bool(row["missing"] or row["stale"] or row["delisted"])
         if unavailable and signal.direction != "ABSTAIN":
             # An earlier signal is never silently extended over bad data.

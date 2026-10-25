@@ -7,10 +7,13 @@ from tycho.contracts import (
     FactorFrame,
     MarketStateRequest,
 )
+from tycho.factors import compute_factors
 from tycho.marketstate import MarketStateProvider
 from tycho.synthetic import make_synthetic_tape
 
 UNIVERSE = "USDTM_TOP30_PIT"
+# test convention only: the monograph value is PENDING
+CONVENTION = {"kind": "span", "value": 60, "returns": "log", "min_periods": 20}
 
 
 @pytest.fixture
@@ -296,3 +299,113 @@ def test_expert_signal_validation():
         _signal(score=None, direction="LONG")
     with pytest.raises(ValueError, match="direction"):
         _signal(direction="MAYBE")
+
+
+def test_dataset_hash_uses_only_as_of_visible_rows(tape):
+    t0 = pd.Timestamp("2019-11-10 12:00", tz="UTC")
+    baseline = MarketStateProvider(tape, universe_size=50, min_history_days=20).resolve(
+        request(t0)
+    )
+
+    _inject_future_rows(tape)
+    later = MarketStateProvider(tape, universe_size=50, min_history_days=20)
+    again = later.resolve(request(t0))
+    assert again.snapshot_id == baseline.snapshot_id
+    assert again.dataset_hash == baseline.dataset_hash
+    assert again.frame().equals(baseline.frame())
+
+
+def test_late_revision_visible_at_as_of_busts_the_snapshot_cache(provider, tape):
+    t0 = pd.Timestamp("2019-11-10 12:00", tz="UTC")
+    baseline = provider.resolve(request(t0))
+
+    # arrived after the tape was loaded, but its available_at is before as_of
+    revision = _inject_revision(tape, available="2019-11-10 11:00")
+    after = provider.resolve(request(t0))
+
+    assert after.snapshot_id != baseline.snapshot_id
+    row = after.bars[
+        (after.bars["instrument_id"] == "BTCUSDT")
+        & (after.bars["event_time"] == revision["event_time"])
+    ]
+    assert row["revision"].tolist() == [1]
+    assert row["close"].tolist() == [revision["close"]]
+
+
+def test_closed_bars_only_excludes_a_bar_stamped_at_as_of(provider, tape):
+    as_of = pd.Timestamp("2019-11-10 12:00", tz="UTC")
+    row = tape.bars_1d[
+        (tape.bars_1d["instrument_id"] == "BTCUSDT")
+        & (tape.bars_1d["event_time"] == pd.Timestamp("2019-11-09", tz="UTC"))
+    ].iloc[[0]].copy()
+    row["event_id"] = "bars_1d:BTCUSDT:stamped-at-as-of"
+    row["event_time"] = as_of
+    row["received_at"] = as_of
+    row["available_at"] = as_of
+    tape.bars_1d = pd.concat([tape.bars_1d, row], ignore_index=True)
+
+    snapshot = provider.resolve(request(as_of))
+    assert "bars_1d:BTCUSDT:stamped-at-as-of" not in set(snapshot.bars["event_id"])
+    # one minute later the very same bar is a closed bar and enters the frame
+    later = provider.resolve(request(as_of + pd.Timedelta(minutes=1)))
+    assert "bars_1d:BTCUSDT:stamped-at-as-of" in set(later.bars["event_id"])
+
+
+def test_stablecoin_with_bars_and_volume_stays_out_of_the_universe(tape):
+    start = pd.Timestamp("2019-09-01", tz="UTC")
+    template = tape.bars_1d.iloc[[0]].copy()
+    rows = []
+    for offset in range(90):
+        stamp = start + pd.Timedelta(days=offset)
+        row = template.copy()
+        row["event_id"] = f"bars_1d:USDCUSDT:{stamp.date()}"
+        row["event_time"] = stamp
+        row["received_at"] = stamp + pd.Timedelta(minutes=1)
+        row["available_at"] = stamp + pd.Timedelta(minutes=1)
+        row["instrument_id"] = "USDCUSDT"
+        row["volume"] = 1e9
+        row["quote_volume"] = 1e9  # would rank first if the kind filter were gone
+        rows.append(row)
+    tape.bars_1d = pd.concat([tape.bars_1d, *rows], ignore_index=True)
+
+    provider = MarketStateProvider(tape, universe_size=50, min_history_days=20)
+    universe = provider.resolve(request("2019-11-10")).universe
+    assert "USDCUSDT" not in universe
+    assert "BTCDOMUSDT" not in universe
+    assert "BTCUSDT" in universe
+
+
+def test_empty_universe_raises(tape):
+    provider = MarketStateProvider(tape, universe_size=0, min_history_days=20)
+    with pytest.raises(ValueError, match="empty universe"):
+        provider.resolve(request("2019-11-10"))
+
+
+def test_factor_cache_uses_the_five_element_key(provider):
+    snapshot = provider.resolve(request("2019-11-10"))
+    names = ("ma_20", "ewma_vol_60d")
+
+    first = provider.factors(snapshot, names, CONVENTION)
+    assert provider.factors(snapshot, names, CONVENTION) is first
+    assert first.snapshot_id == snapshot.snapshot_id
+    pd.testing.assert_frame_equal(
+        first.values, compute_factors(snapshot, names, CONVENTION).values
+    )
+
+    key = (
+        snapshot.dataset_hash,
+        snapshot.as_of,
+        snapshot.universe_hash,
+        snapshot.request_hash,
+        first.feature_code_hash,
+    )
+    assert provider._factor_cache[key] is first
+    # the snapshot cache keeps its own key, with the feature slot still empty
+    assert (snapshot.dataset_hash, snapshot.as_of, snapshot.universe_hash,
+            snapshot.request_hash, "") in provider._cache
+
+    other = {"kind": "halflife", "value": 30.0, "returns": "simple", "min_periods": 5}
+    second = provider.factors(snapshot, names, other)
+    assert second is not first
+    assert second.feature_code_hash != first.feature_code_hash
+    assert len(provider._factor_cache) == 2

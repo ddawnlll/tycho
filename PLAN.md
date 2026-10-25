@@ -209,7 +209,9 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
   - **Out of scope:** Writing code.
   - **Depends on:** T2.1 [#12](https://github.com/ddawnlll/tycho/issues/12), T2.2 [#13](https://github.com/ddawnlll/tycho/issues/13), T2.3 [#14](https://github.com/ddawnlll/tycho/issues/14)
 
-### M3 — EXP-TREND-E001 + portfolio (F3) — [milestone](https://github.com/ddawnlll/tycho/milestone/4)
+#- [ ] T2.4 M2 verifier fixes: expert gets copies and enforcement uses pre-call availability; dataset_hash from the as_of-visible data; real feature_code_hash factor cache (5-element key); closed-bar test; stablecoin with volume excluded; empty universe → raise; ewma_cov NaN alignment — `uv run pytest -q tests/test_marketstate.py tests/test_expert_runtime.py tests/test_factors.py`
+
+## M3 — EXP-TREND-E001 + portfolio (F3) — [milestone](https://github.com/ddawnlll/tycho/milestone/4)
 
 Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open: 4/5.
 

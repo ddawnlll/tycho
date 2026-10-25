@@ -22,6 +22,14 @@ _THRESHOLD_KEYS = (
     "max_months_below_30",
 )
 
+_CONTRACT_FIELDS = (
+    "tick_size",
+    "step_size",
+    "min_notional",
+    "contract_multiplier",
+    "funding_interval_hours",
+)
+
 
 def audit(tape, thresholds, min_history_days=None) -> dict:
     if min_history_days is None:
@@ -59,13 +67,26 @@ def _structural_defects(tape) -> list:
         if early:
             defects.append(f"{name}: available_at before event_time ({early} rows)")
 
+    instruments = _latest(tape.instruments)
+    perps = instruments[instruments["kind"] == "perp"]
     bar_ids = set(tape.bars_1d["instrument_id"])
     spec_ids = set(tape.specs["instrument_id"])
     missing_spec = int((~tape.bars_1d["instrument_id"].isin(spec_ids)).sum())
     if missing_spec:
         defects.append(f"bars_1d: bars without any spec ({missing_spec} rows)")
 
-    delisted = _delisted_perps(tape.instruments)
+    intervals = _funding_intervals(tape.specs)
+    no_interval = [iid for iid in perps["instrument_id"]
+                   if not _valid_interval(intervals.get(iid))]
+    if no_interval:
+        defects.append(
+            f"instruments: perps without funding_interval_hours ({len(no_interval)}: {no_interval})"
+        )
+
+    delisted = _delisted_perps(instruments)
+    if not len(delisted):
+        # a survivor-only tape cannot show whether the listing table is PIT
+        defects.append("no delisted perps: survivorship cannot be audited")
     no_delisted_at = delisted["delisted_at"].isna().sum()
     if no_delisted_at:
         defects.append(f"instruments: delisted perps without delisted_at ({int(no_delisted_at)})")
@@ -76,7 +97,7 @@ def _structural_defects(tape) -> list:
 
 
 def _metrics(tape, min_history_days) -> dict:
-    instruments = tape.instruments
+    instruments = _latest(tape.instruments)
     perps = instruments[instruments["kind"] == "perp"]
     excluded = int(instruments["kind"].isin(["stablecoin", "index"]).sum())
 
@@ -90,20 +111,22 @@ def _metrics(tape, min_history_days) -> dict:
         if bars is not None and len(bars) and bars["event_time"].max() >= row["last_trade_day"]:
             covered += 1
 
-    availability = {}
+    late_share = {}
     total_rows = observed_rows = revisions = 0
     for name in TABLE_COLUMNS:
         df = getattr(tape, name)
         if len(df):
-            ok = df["available_at"].notna() & (df["available_at"] >= df["event_time"])
-            availability[name] = float(ok.mean())
+            # reported only: how much of the tape arrived more than a day late
+            late = df["available_at"] - df["event_time"] > pd.Timedelta(days=1)
+            late_share[name] = float(late.mean())
             observed_rows += int(df["received_at_is_observed"].sum())
         else:
-            availability[name] = 1.0
+            late_share[name] = 0.0
         total_rows += len(df)
         revisions += int((df["revision"] > 0).sum())
 
     funding_min, funding_median = _funding_coverage(tape, perps, bars_by)
+    mark_min, mark_median = _mark_coverage(tape, perps, bars_by)
     return {
         "listings": {
             "instruments_total": int(len(instruments)),
@@ -111,18 +134,27 @@ def _metrics(tape, min_history_days) -> dict:
             "excluded_stablecoin_index": excluded,
             "delisted_perps": int(len(delisted)),
             "delisted_covered": int(covered),
-            "delisted_coverage": covered / len(delisted) if len(delisted) else 1.0,
+            "delisted_coverage": covered / len(delisted) if len(delisted) else float("nan"),
         },
         "availability": {
-            "tables": availability,
+            "late_over_1d_share": late_share,
             "received_at_is_observed": observed_rows / total_rows if total_rows else 1.0,
             "revision_count": revisions,
         },
         "funding_coverage": {"min": funding_min, "median": funding_median},
-        "mark_coverage": len(tape.mark) / len(tape.bars_1d) if len(tape.bars_1d) else 1.0,
+        "mark_coverage": {"min": mark_min, "median": mark_median},
         "spec_coverage": _spec_coverage(tape),
-        "universe": _universe(tape, perps, bars_by, min_history_days),
+        "universe": _universe(tape, min_history_days),
     }
+
+
+def _latest(instruments):
+    # instruments are versioned: the newest visible revision carries the current lifecycle
+    return (
+        instruments.sort_values(["event_time", "revision"])
+        .groupby("instrument_id", sort=False)
+        .tail(1)
+    )
 
 
 def _delisted_perps(instruments):
@@ -130,18 +162,30 @@ def _delisted_perps(instruments):
     return perps[perps["delisted_at"].notna() | perps["last_trade_day"].notna()]
 
 
-def _funding_coverage(tape, perps, bars_by):
-    # specs persist until replaced, so the last revision carries the interval
-    intervals = (
-        tape.specs.sort_values("valid_from")
-        .groupby("instrument_id")["funding_interval_hours"]
-        .last()
+def _funding_intervals(specs):
+    # specs persist until replaced, so the newest spec carries the interval;
+    # a NaN there must stay visible instead of being skipped by groupby.last()
+    latest = (
+        specs.dropna(subset=["valid_from"])
+        .sort_values("valid_from")
+        .drop_duplicates("instrument_id", keep="last")
     )
+    return latest.set_index("instrument_id")["funding_interval_hours"]
+
+
+def _valid_interval(value) -> bool:
+    return bool(pd.notna(value) and np.isfinite(value) and value > 0)
+
+
+def _funding_coverage(tape, perps, bars_by):
+    intervals = _funding_intervals(tape.specs)
     observed = tape.funding.groupby("instrument_id").size()
     ratios = []
     for _, row in perps.iterrows():
         interval = intervals.get(row["instrument_id"])
-        if interval is None or not np.isfinite(interval) or interval <= 0:
+        if not _valid_interval(interval):
+            # a missing interval is a structural defect, but it still counts as uncovered
+            ratios.append(0.0)
             continue
         live_end = row["last_trade_day"] if not pd.isna(row["last_trade_day"]) else None
         if live_end is None:
@@ -160,18 +204,46 @@ def _funding_coverage(tape, perps, bars_by):
     return float(np.min(ratios)), float(np.median(ratios))
 
 
+def _mark_coverage(tape, perps, bars_by):
+    mark_days = (
+        tape.mark.assign(_day=tape.mark["event_time"].dt.normalize())
+        .groupby("instrument_id")["_day"].nunique()
+    )
+    ratios = []
+    for _, row in perps.iterrows():
+        bars = bars_by.get(row["instrument_id"])
+        if bars is None or not len(bars):
+            continue
+        bar_days = bars["event_time"].dt.normalize().nunique()
+        ratios.append(min(1.0, int(mark_days.get(row["instrument_id"], 0)) / bar_days))
+    if not ratios:
+        return None, None
+    return float(np.min(ratios)), float(np.median(ratios))
+
+
 def _spec_coverage(tape):
     if not len(tape.bars_1d):
         return 1.0
-    first_valid = tape.specs.groupby("instrument_id")["valid_from"].min()
-    if first_valid.empty:
+    specs = (
+        tape.specs.dropna(subset=["valid_from"])
+        .sort_values(["valid_from", "revision"])
+        .drop_duplicates(["instrument_id", "valid_from"], keep="last")
+    )
+    if specs.empty:
         return 0.0
-    valid_at = tape.bars_1d["instrument_id"].map(first_valid)
-    covered = valid_at.notna() & (valid_at <= tape.bars_1d["event_time"])
-    return float(covered.mean())
+    complete = (specs[list(_CONTRACT_FIELDS)] > 0).all(axis=1)
+    merged = pd.merge_asof(
+        tape.bars_1d[["instrument_id", "event_time"]].sort_values("event_time"),
+        specs[["instrument_id", "valid_from"]].assign(_complete=complete),
+        left_on="event_time",
+        right_on="valid_from",
+        by="instrument_id",
+        direction="backward",
+    )
+    return float(merged["_complete"].eq(True).mean())
 
 
-def _universe(tape, perps, bars_by, min_history_days):
+def _universe(tape, min_history_days):
     if not len(tape.bars_1d):
         return {
             "min_history_days": min_history_days,
@@ -183,20 +255,24 @@ def _universe(tape, perps, bars_by, min_history_days):
     month_starts = pd.date_range(start, tape.bars_1d["event_time"].max(), freq="MS")
     months = []
     for month_start in month_starts:
-        window_start = month_start - pd.Timedelta(days=30)
+        # month-start view only: history and volume must predate the rebalance decision
+        view = tape.as_of(month_start)
+        before = view.bars_1d[view.bars_1d["event_time"] < month_start]
+        history = before.groupby("instrument_id")["event_time"].nunique()
+        trailing = before[before["event_time"] >= month_start - pd.Timedelta(days=30)]
+        has_volume = set(trailing.loc[trailing["quote_volume"].notna(), "instrument_id"])
         eligible = 0
-        for _, row in perps.iterrows():
-            bars = bars_by.get(row["instrument_id"])
-            if bars is None or pd.isna(row["listed_at"]):
+        for _, row in _latest(view.instruments).iterrows():
+            iid = row["instrument_id"]
+            if row["kind"] != "perp":
                 continue
-            if row["listed_at"] > month_start:
+            if pd.isna(row["listed_at"]) or row["listed_at"] > month_start:
                 continue
             if not pd.isna(row["delisted_at"]) and row["delisted_at"] < month_start:
                 continue
-            if bars.loc[bars["event_time"] < month_start, "event_time"].nunique() < min_history_days:
+            if int(history.get(iid, 0)) < min_history_days:
                 continue
-            trailing = bars[(bars["event_time"] >= window_start) & (bars["event_time"] < month_start)]
-            if not trailing["quote_volume"].notna().any():
+            if iid not in has_volume:
                 continue
             eligible += 1
         months.append({"month": month_start.strftime("%Y-%m"), "eligible": eligible})
@@ -214,7 +290,7 @@ def _failing_thresholds(metrics, thresholds) -> list:
     checks = {
         "min_delisted_coverage": (metrics["listings"]["delisted_coverage"], "min"),
         "min_funding_coverage": (metrics["funding_coverage"]["min"], "min"),
-        "min_mark_coverage": (metrics["mark_coverage"], "min"),
+        "min_mark_coverage": (metrics["mark_coverage"]["min"], "min"),
         "min_spec_coverage": (metrics["spec_coverage"], "min"),
         "max_months_below_30": (metrics["universe"]["months_below_30"], "max"),
     }
@@ -222,7 +298,7 @@ def _failing_thresholds(metrics, thresholds) -> list:
     for key in _THRESHOLD_KEYS:
         value, kind = checks[key]
         limit = thresholds.get(key) if hasattr(thresholds, "get") else None
-        if limit is None or value is None:
+        if limit is None or value is None or pd.isna(value):
             failing.append(key)
         elif (kind == "min" and value < limit) or (kind == "max" and value > limit):
             failing.append(key)

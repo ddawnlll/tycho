@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from tycho import config
+from tycho.feasibility import audit
 from tycho.synthetic import make_synthetic_tape
 from tycho.tape import TABLE_COLUMNS, Tape, load_tape, save_tape, validate
 
@@ -26,6 +27,61 @@ def test_deterministic_same_seed(tape):
 def test_different_seed_differs(tape):
     other = make_synthetic_tape(seed=8, n_perps=12, days=120)
     assert not tape.bars_1d["close"].equals(other.bars_1d["close"])
+
+
+def test_synthetic_contract_features_and_kinds(tape):
+    instruments = tape.instruments
+    assert "USDCUSDT" in set(instruments.loc[instruments["kind"] == "stablecoin", "instrument_id"])
+    assert "BTCDOMUSDT" in set(instruments.loc[instruments["kind"] == "index", "instrument_id"])
+
+    thousand = tape.specs[tape.specs["contract_multiplier"] == 1000.0]
+    assert set(thousand["instrument_id"]) == {"1000SHIBUSDT"}
+
+    perp_ids = set(instruments.loc[instruments["kind"] == "perp", "instrument_id"])
+    perp_specs = tape.specs[tape.specs["instrument_id"].isin(perp_ids)]
+    assert set(perp_specs["funding_interval_hours"]) == {8.0}
+
+
+def test_synthetic_bar_revision_differs(tape):
+    revisions = tape.bars_1d[tape.bars_1d["revision"] == 1]
+    assert len(revisions) == 1
+    revision = revisions.iloc[0]
+    base = tape.bars_1d[
+        (tape.bars_1d["instrument_id"] == revision["instrument_id"])
+        & (tape.bars_1d["event_time"] == revision["event_time"])
+        & (tape.bars_1d["revision"] == 0)
+    ].iloc[0]
+    assert revision["close"] != base["close"]
+    assert revision["available_at"] > base["available_at"]
+
+
+def test_synthetic_delisting_is_point_in_time(tape):
+    delisted = tape.instruments[tape.instruments["revision"] == 1]
+    assert len(delisted) == 3
+    for _, row in delisted.iterrows():
+        iid, delisted_at = row["instrument_id"], row["delisted_at"]
+        assert not pd.isna(delisted_at)
+        before = tape.as_of(delisted_at - pd.Timedelta(minutes=1)).instruments
+        row_before = before[before["instrument_id"] == iid].iloc[0]
+        assert pd.isna(row_before["delisted_at"])
+        assert row_before["revision"] == 0
+        after = tape.as_of(row["available_at"]).instruments
+        row_after = after[after["instrument_id"] == iid].iloc[0]
+        assert row_after["delisted_at"] == delisted_at
+
+
+def test_threshold_failure_incomplete(tape):
+    permissive = {
+        "min_delisted_coverage": 0.0,
+        "min_funding_coverage": 0.0,
+        "min_mark_coverage": 0.0,
+        "min_spec_coverage": 0.0,
+        "max_months_below_30": 10**9,
+    }
+    assert audit(tape, permissive)["verdict"] == "PASS"
+    report = audit(tape, dict(permissive, min_spec_coverage=1.1))
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["reasons"] == ["threshold failed: min_spec_coverage"]
 
 
 def test_validate_passes_and_catches_breakage(tape):

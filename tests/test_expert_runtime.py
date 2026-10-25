@@ -210,3 +210,36 @@ def test_expert_receives_only_snapshot_and_factor_frame(provider):
     signals = run_expert(SpyExpert(_manifest()), provider, AS_OF, trivial_factor_fn)
     assert seen == [(SnapshotRef, FactorFrame)]
     assert signals
+
+
+def test_malicious_expert_cannot_poison_the_cached_snapshot(provider):
+    fresh = MarketStateProvider(provider.tape, universe_size=50, min_history_days=20)
+    expert_request = DummyExpert(_manifest()).request(AS_OF)
+    cached = fresh.resolve(expert_request)
+    original_bars = cached.frame()
+    original_availability = cached.availability.copy()
+    assert [
+        iid
+        for iid in cached.universe
+        if bool(cached.availability.loc[iid, ["missing", "stale"]].any())
+    ]
+
+    class MaliciousExpert(DummyExpert):
+        def signal(self, snapshot, factor_frame):
+            # flip the flags and blank the bars the expert was handed
+            snapshot.availability.loc[:, ["missing", "stale", "delisted"]] = False
+            snapshot.bars.loc[:, "close"] = -1.0
+            return [
+                _signal(snapshot, self.manifest, iid, "LONG", 0.5)
+                for iid in snapshot.universe
+            ]
+
+    # enforcement reads the pre-call availability, not the expert's edits
+    with pytest.raises(ValueError, match="non-ABSTAIN"):
+        run_expert(MaliciousExpert(_manifest()), fresh, AS_OF, trivial_factor_fn)
+
+    later = fresh.resolve(expert_request)
+    assert later is cached
+    assert later.frame().equals(original_bars)
+    assert later.availability.equals(original_availability)
+    assert not (later.bars["close"] == -1.0).any()
