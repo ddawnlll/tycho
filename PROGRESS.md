@@ -49,3 +49,8 @@
 - PLAN.md rewritten: goals, monograph reading map, worker protocol, dependency graph, per-item issue links and specs, PENDING table. Issue forms + PR template in `.github/`.
 - Plan changes: new T4.4 (diagnostics) and T5.3 (subperiods + per-MA component check); old T5.3 → T5.4, old T5.4 → T5.5; verifier issues V0–V7.
 - Coordinator decisions recorded in issues (not monograph values): gross 2.0 cap applied by proportional shrink like the vol cap (T3.2); ABSTAIN → weight and the zero-crossing rule are required arguments (monograph leaves them undefined).
+
+### M1 verifier (wf_78150cd0-203): FAIL → T1.3
+- Majors: the universe metric ignores available_at; a survivor-only tape passes; contract filters are unchecked; mark coverage is a global ratio. Minors: synthetic features untested, synthetic delisted_at not PIT, holdout segment check case-sensitive, event rows lack instrument_spec_version.
+- Holdout case-sensitivity and the missing instrument_spec_version on event rows are not fixed: the guard covers the first, and the second does not affect E-001 (specs are joined by timestamp). Recorded as minor residuals.
+- The duplicate M1 verifier rerun (wf_5f4a3cac-46f) was stopped as redundant.
