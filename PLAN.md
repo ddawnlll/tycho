@@ -159,6 +159,9 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
 - [x] **T1.2** G0 FEASIBILITY-DATA audit (tycho.feasibility) — [#9](https://github.com/ddawnlll/tycho/issues/9)  
   Commit 1f15ca9. Worker notes: funding expected count uses latest spec interval; history counted in distinct bar days.
   Acceptance: `uv run pytest -q tests/test_feasibility.py`
+- [x] **T1.3** G0 audit fixes from the M1 verifier — [#40](https://github.com/ddawnlll/tycho/issues/40)  
+  Commit e28bcaa. PIT universe (available_at), survivor-only tape fails, contract filters, per-instrument mark coverage, PIT synthetic delisting.
+  Acceptance: `uv run pytest -q tests/test_feasibility.py tests/test_tape.py`
 - [CANCELLED owner 2026-10-25] **X1.a** G0 run on real Binance data — [#10](https://github.com/ddawnlll/tycho/issues/10) · BLOCKED  
   Needs dev_end_date [OWNER] and G0 sufficiency thresholds (PENDING). Owner cancelled 2026-10-25.
 - [ ] **V1** M1 verifier (G0 tape + audit) — [#11](https://github.com/ddawnlll/tycho/issues/11) · verifier
@@ -209,8 +212,8 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
   - **Out of scope:** Writing code.
   - **Depends on:** T2.1 [#12](https://github.com/ddawnlll/tycho/issues/12), T2.2 [#13](https://github.com/ddawnlll/tycho/issues/13), T2.3 [#14](https://github.com/ddawnlll/tycho/issues/14)
 
-#- [ ] T2.4 M2 verifier fixes: expert gets copies and enforcement uses pre-call availability; dataset_hash from the as_of-visible data; real feature_code_hash factor cache (5-element key); closed-bar test; stablecoin with volume excluded; empty universe → raise; ewma_cov NaN alignment — `uv run pytest -q tests/test_marketstate.py tests/test_expert_runtime.py tests/test_factors.py`
-- [x] T2.5 M2 re-verify fixes: FactorFrame cache returns copies / expert gets a copy; ordered feature hash; timeframe validation tests; quality != ok → ABSTAIN — `uv run pytest -q tests/test_marketstate.py tests/test_expert_runtime.py tests/test_factors.py`
+- [x] **T2.4** — [#41](https://github.com/ddawnlll/tycho/issues/41) M2 verifier fixes: expert gets copies and enforcement uses pre-call availability; dataset_hash from the as_of-visible data; real feature_code_hash factor cache (5-element key); closed-bar test; stablecoin with volume excluded; empty universe → raise; ewma_cov NaN alignment — `uv run pytest -q tests/test_marketstate.py tests/test_expert_runtime.py tests/test_factors.py`
+- [x] **T2.5** — [#42](https://github.com/ddawnlll/tycho/issues/42) M2 re-verify fixes: FactorFrame cache returns copies / expert gets a copy; ordered feature hash; timeframe validation tests; quality != ok → ABSTAIN — `uv run pytest -q tests/test_marketstate.py tests/test_expert_runtime.py tests/test_factors.py`
 
 ## M3 — EXP-TREND-E001 + portfolio (F3) — [milestone](https://github.com/ddawnlll/tycho/milestone/4)
 
@@ -294,6 +297,11 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
   - **PENDING / BLOCKED:** Binding live window length → BLOCKED (X3.a). ewma_convention → test fixture value, clearly marked synthetic.
   - **Out of scope:** Choosing a binding window length; editing config.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17)
+- [ ] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43)
+  - **Goal:** Close the M3 verifier findings (wf_4bf0a3cb-a4f); the blocker is a point-in-time leak in the vectorized full-history path.
+  - **Contract:** (1) blocker: `vectorized.trend_panels` builds from the end-of-tape view, so later revisions leak into earlier rows; (2) cov evaluated one bar before the decision time — add a test where the vol cap binds; (3) NaN latest close must ABSTAIN, not fall back; (4) `on_abstain` required argument, no default; (5) same MA NaN handling in panel and snapshot paths.
+  - **Acceptance:** `uv run pytest -q tests/test_window_equality.py tests/test_portfolio.py tests/test_exp_trend.py`
+  - **Depends on:** T2.5 [#42](https://github.com/ddawnlll/tycho/issues/42) (shared factors.py)
 - [CANCELLED owner 2026-10-25] **X3.a** Binding live window length: §08 "≥400 bars" vs registry warmup "not universal 400" / lookback 260 — [#19](https://github.com/ddawnlll/tycho/issues/19) · BLOCKED  
   Text/registry conflict → BLOCKED per CLAUDE.md. Owner cancelled the resolution 2026-10-25; T3.3 keeps window length as a test parameter.
 - [ ] **V3** M3 verifier (EXP-TREND-E001 + portfolio) — [#20](https://github.com/ddawnlll/tycho/issues/20) · verifier
