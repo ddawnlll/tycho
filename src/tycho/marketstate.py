@@ -2,7 +2,14 @@
 
 import pandas as pd
 
-from .contracts import SnapshotRef, canonical_hash, frame_hash, snapshot_id_for
+from .contracts import (
+    FactorFrame,
+    SnapshotRef,
+    canonical_hash,
+    frame_hash,
+    snapshot_id_for,
+)
+from .factors import compute_factors, feature_code_hash
 from .tape import TABLE_COLUMNS
 
 UNIVERSE_ID = "USDTM_TOP30_PIT"
@@ -23,30 +30,36 @@ class MarketStateProvider:
         self.tape = tape
         self.universe_size = int(universe_size)
         self.min_history_days = int(min_history_days)
-        # Computed once on purpose: rows appended later cannot move the hash of
-        # an already-taken snapshot, and the hash is no longer recomputed.
-        self.dataset_hash = canonical_hash(
-            {name: frame_hash(getattr(tape, name)) for name in TABLE_COLUMNS}
-        )
         self._cache = {}
+        self._factor_cache = {}
 
     def resolve(self, request) -> SnapshotRef:
         if request.universe_id != UNIVERSE_ID:
             raise ValueError(f"unknown universe_id: {request.universe_id!r}")
         lookback = _lookback(request)
         as_of = _utc(request.as_of)
+        view = self.tape.as_of(as_of)
+        # Hash what is visible at as_of, not the whole tape: future rows must not
+        # move an earlier snapshot_id, and a late revision visible at as_of must.
+        dataset_hash = canonical_hash(
+            {name: frame_hash(getattr(view, name)) for name in TABLE_COLUMNS}
+        )
 
         universe = self._universe(as_of.normalize().replace(day=1))
+        if not universe:
+            raise ValueError(
+                f"empty universe: no eligible {UNIVERSE_ID} instrument at "
+                f"{as_of.isoformat()}"
+            )
         universe_hash = canonical_hash(
             {"universe_id": request.universe_id, "instruments": list(universe)}
         )
         request_hash = request.request_hash()
         # feature_code_hash is an empty placeholder at the snapshot stage (C-02 fills it)
-        key = (self.dataset_hash, as_of, universe_hash, request_hash, "")
+        key = (dataset_hash, as_of, universe_hash, request_hash, "")
         if key in self._cache:
             return self._cache[key]
 
-        view = self.tape.as_of(as_of)
         bars = view.bars_1d[view.bars_1d["instrument_id"].isin(universe)]
         if request.closed_bars_only:
             # a bar stamped at or after as_of is still forming, so it is not closed
@@ -64,10 +77,10 @@ class MarketStateProvider:
         )
         snapshot = SnapshotRef(
             snapshot_id=snapshot_id_for(
-                self.dataset_hash, as_of, universe_hash, request_hash, bars
+                dataset_hash, as_of, universe_hash, request_hash, bars
             ),
             as_of=as_of,
-            dataset_hash=self.dataset_hash,
+            dataset_hash=dataset_hash,
             universe_hash=universe_hash,
             request_hash=request_hash,
             universe=universe,
@@ -76,6 +89,22 @@ class MarketStateProvider:
         )
         self._cache[key] = snapshot
         return snapshot
+
+    def factors(self, snapshot, factor_names, ewma_convention) -> FactorFrame:
+        # Fifth key element identifies the factor code + convention (C-02).
+        feature_hash = feature_code_hash(ewma_convention, factor_names)
+        key = (
+            snapshot.dataset_hash,
+            snapshot.as_of,
+            snapshot.universe_hash,
+            snapshot.request_hash,
+            feature_hash,
+        )
+        if key not in self._factor_cache:
+            self._factor_cache[key] = compute_factors(
+                snapshot, factor_names, ewma_convention
+            )
+        return self._factor_cache[key]
 
     def _universe(self, month_start) -> tuple:
         # Rank at the month start with the month-start view only: no later data.

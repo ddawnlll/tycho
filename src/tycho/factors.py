@@ -54,7 +54,7 @@ def compute_factors(snapshot, factors, ewma_convention) -> FactorFrame:
 
     return FactorFrame(
         snapshot_id=snapshot.snapshot_id,
-        feature_code_hash=_feature_code_hash(convention, names),
+        feature_code_hash=feature_code_hash(convention, names),
         values=values,
     )
 
@@ -112,8 +112,13 @@ def _returns(closes, convention) -> pd.Series:
 
 def _ewma(values: pd.Series, convention) -> pd.Series:
     kwargs = {convention["kind"]: float(convention["value"])}
+    # ignore_na=True: a NaN return is a skipped observation, so a compacted pair
+    # series (ewma_cov) and the raw series (_ewma_vol) decay identically.
     return values.ewm(
-        adjust=False, min_periods=int(convention["min_periods"]), **kwargs
+        adjust=False,
+        ignore_na=True,
+        min_periods=int(convention["min_periods"]),
+        **kwargs,
     ).mean()
 
 
@@ -125,7 +130,9 @@ def _ewma_vol(closes, convention) -> float:
     return float(np.sqrt(variance.iloc[-1] * _ANNUALIZATION_DAYS))
 
 
-def _feature_code_hash(convention, names) -> str:
+def feature_code_hash(convention, names) -> str:
+    """Hash of the factor code plus the convention and requested names."""
+    convention = _validate(convention)
     digest = hashlib.sha256(Path(__file__).read_bytes())
     canonical = json.dumps(
         [
