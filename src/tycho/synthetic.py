@@ -61,9 +61,25 @@ def make_synthetic_tape(seed=0, n_perps=40, start="2019-09-01", days=900, rho=0.
             "symbol": sym,
             "kind": "perp",
             "listed_at": listed_at,
-            "delisted_at": delisted_at,
-            "last_trade_day": last_trade_day,
+            # the delisting is published by a later revision: a pre-delisting view
+            # must not already know it
+            "delisted_at": pd.NaT,
+            "last_trade_day": pd.NaT,
         })
+        if i in last_idx:
+            instrument_rows.append(_common_row(
+                f"instruments:{sym}:1",
+                listed_at,
+                delisted_at,
+                revision=1,
+            ) | {
+                "instrument_id": sym,
+                "symbol": sym,
+                "kind": "perp",
+                "listed_at": listed_at,
+                "delisted_at": delisted_at,
+                "last_trade_day": last_trade_day,
+            })
         spec_rows.append(_common_row(
             f"specs:{sym}:1", listed_at, listed_at + pd.Timedelta(minutes=1)
         ) | {
@@ -199,7 +215,7 @@ def make_synthetic_tape(seed=0, n_perps=40, start="2019-09-01", days=900, rho=0.
     return tape
 
 
-def _common_row(event_id, event_time, available_at):
+def _common_row(event_id, event_time, available_at, revision=0):
     return {
         "event_id": event_id,
         "event_time": event_time,
@@ -207,7 +223,7 @@ def _common_row(event_id, event_time, available_at):
         "received_at_is_observed": False,
         "available_at": available_at,
         "source": "synthetic",
-        "revision": 0,
+        "revision": revision,
         "quality": "ok",
     }
 
