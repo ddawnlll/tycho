@@ -1,0 +1,40 @@
+name: BLOCKED / owner decision
+description: Text–registry conflict, missing PENDING value, or anything only the owner can decide. Agents record it; they never resolve it.
+title: "[BLOCKED] <topic>"
+labels: ["blocked"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        CLAUDE.md: if monograph text and the `#tycho-registry` JSON conflict, the item is BLOCKED — never pick an interpretation.
+        Owner-only (K-11): capital, risk limits, live, holdout, KS reset, budget caps, prereg lock.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Text vs registry conflict
+        - PENDING monograph parameter
+        - Owner-only decision
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Conflicting / missing sources
+      description: Quote both places verbatim with section anchor and registry path.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: What is blocked
+      description: Issues and runs that cannot proceed; what the code does meanwhile (required argument, refuse real run).
+    validations:
+      required: true
+  - type: textarea
+    id: needed
+    attributes:
+      label: Decision needed from the owner
+    validations:
+      required: true

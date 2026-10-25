@@ -1,0 +1,92 @@
+name: Agent task
+description: One self-contained implementation task a Claude Code worker can finish in one session (explore → plan → code → verify).
+title: "[T?.?] <component>: <what>"
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Write this so a worker with an empty context can finish it.** Name the files, the monograph sections, the
+        exact acceptance command and what is out of scope. A worker reads it with `gh issue view <n>`.
+        Rules that always apply (CLAUDE.md): never guess a PENDING parameter, never read `data/holdout/`,
+        never edit `tests/golden/` or `prereg/locked/`, synthetic tape only.
+  - type: input
+    id: task_id
+    attributes:
+      label: Task ID
+      description: PLAN.md id, e.g. T3.2
+      placeholder: T3.2
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What exists when this is done, and why the monograph needs it (1–3 sentences).
+    validations:
+      required: true
+  - type: textarea
+    id: monograph
+    attributes:
+      label: Monograph reading list
+      description: |
+        Section anchors + search phrases in docs/tycho-monograf-v1.3.2.html, and registry JSON paths.
+        Example: `#bilesenler` "C-04 · Portfolio Construction"; registry `first_experiment.sizing`.
+      placeholder: |
+        - §09 `#bilesenler` → "C-04 · Portfolio Construction" (b formula, D-06)
+        - registry: `first_experiment.sizing`, `decisions[D-06]`
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files to read / create / change
+      description: Existing code to reuse (module + function) and new files.
+      placeholder: |
+        read: src/tycho/factors.py (ewma_cov), src/tycho/contracts.py (ExpertSignal)
+        new:  src/tycho/portfolio.py, tests/test_portfolio.py
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contract / specification
+      description: Signatures, formulas, invariants. Quote the monograph; do not paraphrase numbers.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance test
+      description: The command that must pass and the cases it must cover. The PLAN.md item becomes [x] only when this passes.
+      render: shell
+      placeholder: uv run pytest -q tests/test_portfolio.py
+    validations:
+      required: true
+  - type: textarea
+    id: pending
+    attributes:
+      label: PENDING / BLOCKED parameters
+      description: Parameters the monograph leaves open. They become required arguments with no default; real runs refuse while config says PENDING.
+      placeholder: "ewma_convention (config sizing.ewma_convention = PENDING) → required arg"
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What the worker must not do in this issue.
+    validations:
+      required: true
+  - type: textarea
+    id: depends
+    attributes:
+      label: Depends on
+      placeholder: "#12, #16"
+  - type: checkboxes
+    id: dod
+    attributes:
+      label: Definition of done
+      options:
+        - label: Acceptance command passes; full suite `uv run pytest -q` passes
+        - label: No PENDING value guessed; no holdout / protected path touched
+        - label: Evidence (command + output tail) pasted in the PR or closing comment
+        - label: PLAN.md item set to [x] and PROGRESS.md updated in the same PR

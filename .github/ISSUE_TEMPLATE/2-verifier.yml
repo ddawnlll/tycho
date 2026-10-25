@@ -1,0 +1,56 @@
+name: Milestone verifier
+description: Clean-context review of a finished milestone. Reviews only — writes no code; findings become new task/bug issues.
+title: "[Verify M?] <milestone name>"
+labels: ["verifier"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Run in a **fresh session** that did not write the code (the agent doing the work is not the one grading it).
+        Try to refute each claim: re-run the acceptance tests, read the diff against the monograph, look for
+        look-ahead, guessed PENDING values, double counting, and tests that cannot fail.
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      placeholder: M3 — EXP-TREND-E001 + portfolio
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Issues and commits under review
+      placeholder: "#16 #17 #18; commits abc123..def456"
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Monograph sections to check against
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Checks to run
+      render: shell
+      placeholder: |
+        uv run pytest -q
+        git diff <base>..HEAD -- src/tycho tests
+    validations:
+      required: true
+  - type: dropdown
+    id: verdict
+    attributes:
+      label: Verdict (filled in by the verifier)
+      options:
+        - NOT RUN
+        - PASS
+        - FAIL (blocker/major findings opened as issues)
+    validations:
+      required: true
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings
+      description: One line each — severity (blocker/major/minor), file:line, what breaks, link to the issue opened for it.

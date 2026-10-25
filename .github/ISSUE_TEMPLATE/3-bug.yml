@@ -1,0 +1,47 @@
+name: Defect
+description: Wrong result, look-ahead, double counting, guard bypass or a failing test.
+title: "[Bug] <component>: <symptom>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fix the root cause in the shared code. Start with a failing test that reproduces it.
+        If a golden case disagrees with the ledger, the code is wrong — never edit `tests/golden/`.
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What happens vs what the monograph says should happen.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      render: shell
+      placeholder: uv run pytest -q tests/test_ledger.py -k funding
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: Likely location
+      placeholder: src/tycho/ledger.py:apply_funding
+  - type: textarea
+    id: spec
+    attributes:
+      label: Monograph reference
+      placeholder: "§07 #matematik 'Nakit–pozisyon–fonlama muhasebesi'; registry accounting_ledger.funding"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - blocker (wrong science or protected boundary)
+        - major (wrong number, test cannot fail)
+        - minor
+    validations:
+      required: true

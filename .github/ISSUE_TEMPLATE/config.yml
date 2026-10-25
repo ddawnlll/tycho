@@ -1,0 +1,9 @@
+# Every issue must come from a form so agent workers always get the same sections.
+blank_issues_enabled: false
+contact_links:
+  - name: Binding spec (monograph v1.3.2)
+    url: https://github.com/ddawnlll/tycho/blob/main/docs/tycho-monograf-v1.3.2.html
+    about: Read the cited sections and the #tycho-registry JSON before opening or working an issue.
+  - name: PLAN.md (milestones, order, dependencies)
+    url: https://github.com/ddawnlll/tycho/blob/main/PLAN.md
+    about: The task list every issue belongs to.

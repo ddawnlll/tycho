@@ -43,3 +43,9 @@
 - `/exit` interrupted the M1 verifier and T2.2/T2.3; T2.1 had finished and is merged (50 tests pass). T2.2/T2.3 restarted (wf_a7dad3fa-170), M1 verifier re-run.
 
 ### M2 (wf_a9f6354e-534) — T2.1/T2.2/T2.3 DONE, merged. The /exit did not stop this workflow; the duplicate rerun (wf_a7dad3fa-170) should skip via runs/ results. Worker note: ewma_cov has no PSD repair (relevant for the 2x vol cap).
+
+### 2026-10-25 — Issue-based tracking
+- Public repo https://github.com/ddawnlll/tycho (owner chose public). 39 issues in 8 milestones; done items closed as completed with commit evidence, owner-cancelled items closed as not planned.
+- PLAN.md rewritten: goals, monograph reading map, worker protocol, dependency graph, per-item issue links and specs, PENDING table. Issue forms + PR template in `.github/`.
+- Plan changes: new T4.4 (diagnostics) and T5.3 (subperiods + per-MA component check); old T5.3 → T5.4, old T5.4 → T5.5; verifier issues V0–V7.
+- Coordinator decisions recorded in issues (not monograph values): gross 2.0 cap applied by proportional shrink like the vol cap (T3.2); ABSTAIN → weight and the zero-crossing rule are required arguments (monograph leaves them undefined).
