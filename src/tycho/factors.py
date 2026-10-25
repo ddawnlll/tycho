@@ -131,7 +131,7 @@ def _ewma_vol(closes, convention) -> float:
 
 
 def feature_code_hash(convention, names) -> str:
-    """Hash of the factor code plus the convention and requested names."""
+    """Hash of the factor code plus the convention and the ordered names."""
     convention = _validate(convention)
     digest = hashlib.sha256(Path(__file__).read_bytes())
     canonical = json.dumps(
@@ -142,7 +142,9 @@ def feature_code_hash(convention, names) -> str:
                 "returns": convention["returns"],
                 "min_periods": int(convention["min_periods"]),
             },
-            sorted(names),
+            # ordered, not sorted: the frame's column order follows this tuple,
+            # so two orders must never share one cache key
+            list(names),
         ],
         sort_keys=True,
         separators=(",", ":"),

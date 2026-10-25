@@ -1,5 +1,7 @@
 """C-01 MarketState provider: PIT universe, immutable snapshot, shared cache (08A)."""
 
+import dataclasses
+
 import pandas as pd
 
 from .contracts import (
@@ -21,6 +23,7 @@ _AVAILABILITY_COLUMNS = [
     "missing",
     "stale",
     "delisted",
+    "bad_quality",
     "quality_flags",
 ]
 
@@ -104,7 +107,10 @@ class MarketStateProvider:
             self._factor_cache[key] = compute_factors(
                 snapshot, factor_names, ewma_convention
             )
-        return self._factor_cache[key]
+        # The cache stays private: handing out its frame would let one caller
+        # poison every later run that hits the same key.
+        cached = self._factor_cache[key]
+        return dataclasses.replace(cached, values=cached.values.copy())
 
     def _universe(self, month_start) -> tuple:
         # Rank at the month start with the month-start view only: no later data.
@@ -182,13 +188,14 @@ def _availability(bars, universe, as_of, lookback, max_staleness, delisted_at) -
             "missing": missing,
             "stale": stale,
             "delisted": delisted,
+            "bad_quality": bool(flags),
             "quality_flags": flags,
         }
     availability = pd.DataFrame.from_dict(
         records, orient="index", columns=_AVAILABILITY_COLUMNS
     )
     availability.index.name = "instrument_id"
-    for column in ("missing", "stale", "delisted"):
+    for column in ("missing", "stale", "delisted", "bad_quality"):
         availability[column] = availability[column].astype(bool)
     availability["n_bars"] = availability["n_bars"].astype("int64")
     return availability

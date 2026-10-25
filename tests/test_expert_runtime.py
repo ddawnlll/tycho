@@ -13,6 +13,7 @@ from tycho.contracts import (
     SnapshotRef,
     canonical_hash,
 )
+from tycho.factors import compute_factors
 from tycho.marketstate import MarketStateProvider
 from tycho.runtime import make_manifest, run_expert
 from tycho.synthetic import make_synthetic_tape
@@ -21,6 +22,9 @@ UNIVERSE = "USDTM_TOP30_PIT"
 AS_OF = pd.Timestamp("2019-11-10 12:00", tz="UTC")
 PARAMS = {"lookback": 70, "threshold": 0.0}
 SOURCE = "def signal(snapshot, factor_frame):\n    ...\n"
+# test convention only: the monograph value is PENDING
+CONVENTION = {"kind": "span", "value": 60, "returns": "log", "min_periods": 20}
+FACTORS = ("ma_20", "ma_50")
 
 
 @pytest.fixture
@@ -243,3 +247,91 @@ def test_malicious_expert_cannot_poison_the_cached_snapshot(provider):
     assert later.frame().equals(original_bars)
     assert later.availability.equals(original_availability)
     assert not (later.bars["close"] == -1.0).any()
+
+
+def _factor_expert(impl):
+    class FactorExpert(DummyExpert):
+        def signal(self, snapshot, factor_frame):
+            return impl(snapshot, factor_frame, self.manifest)
+
+    return FactorExpert
+
+
+def _factor_trend(snapshot, factor_frame, manifest):
+    """Direction from the frame's MA values; ABSTAIN wherever the data is bad."""
+    out = []
+    for iid in snapshot.universe:
+        row = snapshot.availability.loc[iid]
+        if bool(
+            row["missing"] or row["stale"] or row["delisted"] or row["bad_quality"]
+        ):
+            out.append(_abstain(snapshot, manifest, iid))
+            continue
+        values = factor_frame.values.loc[iid]
+        delta = float(values["ma_50"] - values["ma_20"])
+        if delta > 0:
+            out.append(_signal(snapshot, manifest, iid, "LONG", 0.5))
+        elif delta < 0:
+            out.append(_signal(snapshot, manifest, iid, "SHORT", -0.5))
+        else:
+            out.append(_signal(snapshot, manifest, iid, "FLAT", 0.0))
+    return out
+
+
+def test_hostile_factor_frame_write_does_not_poison_a_later_run(provider):
+    frames = {}
+
+    def factor_fn(snapshot):
+        # a caller-level cache that would leak without run_expert's copy
+        return frames.setdefault(
+            snapshot.snapshot_id, compute_factors(snapshot, FACTORS, CONVENTION)
+        )
+
+    expert = _factor_expert(_factor_trend)
+    baseline = run_expert(expert(_manifest()), provider, AS_OF, factor_fn)
+    abstained = [s for s in baseline if s.direction == "ABSTAIN"]
+    assert abstained  # the synthetic tape must exercise the ABSTAIN path
+
+    class HostileExpert(DummyExpert):
+        def signal(self, snapshot, factor_frame):
+            factor_frame.values.iloc[:, :] = 1e9
+            return _factor_trend(snapshot, factor_frame, self.manifest)
+
+    run_expert(HostileExpert(_manifest()), provider, AS_OF, factor_fn)
+
+    after = run_expert(expert(_manifest()), provider, AS_OF, factor_fn)
+    assert after == baseline
+    assert [s.instrument_id for s in after if s.direction == "ABSTAIN"] == [
+        s.instrument_id for s in abstained
+    ]
+
+
+def test_bad_quality_bar_requires_abstain(provider):
+    tape = provider.tape
+    bar = tape.bars_1d[
+        (tape.bars_1d["instrument_id"] == "BTCUSDT")
+        & (tape.bars_1d["event_time"] == pd.Timestamp("2019-11-09", tz="UTC"))
+    ].iloc[0]
+    tape.bars_1d.loc[bar.name, "quality"] = "gap"
+
+    snapshot = provider.resolve(DummyExpert(_manifest()).request(AS_OF))
+    assert bool(snapshot.availability.loc["BTCUSDT", "bad_quality"])
+
+    def impl(snap, manifest):
+        return [
+            _signal(snap, manifest, iid, "LONG", 0.5)
+            if iid == "BTCUSDT"
+            else _abstain(snap, manifest, iid)
+            for iid in snap.universe
+        ]
+
+    with pytest.raises(ValueError, match="non-ABSTAIN"):
+        run_expert(DummyExpert(_manifest(), impl), provider, AS_OF, trivial_factor_fn)
+
+    def abstaining(snap, manifest):
+        return [_abstain(snap, manifest, iid) for iid in snap.universe]
+
+    signals = run_expert(
+        DummyExpert(_manifest(), abstaining), provider, AS_OF, trivial_factor_fn
+    )
+    assert all(s.direction == "ABSTAIN" for s in signals)
