@@ -1,0 +1,53 @@
+# Tycho E-001 configuration. Source: monograph v1.3.2 #tycho-registry.
+# "PENDING" = open in the monograph; code must refuse real runs that depend on it.
+
+[periods]
+dev_start = "2019-09-01"
+dev_end_date = "PENDING"          # owner: lock date - 18 months; real-data jobs BLOCKED until set
+holdout_months = 18               # never read
+
+[universe]
+size = 30
+rank_by = "trailing_30d_volume"
+rebalance = "monthly"
+min_history_days = 260
+exclude = ["stablecoin", "index"]
+delist_exit_slippage_bps = 50
+
+[signal]
+ma_periods_days = [20, 50, 100, 200]
+score = "mean sign(P/MA - 1)"
+variants = 1
+
+[sizing]
+target_vol = 0.20
+rho = 0.7
+ewma_vol_days = 60
+ewma_convention = "PENDING"        # span/halflife/com definition
+vol_cap_multiple = 2.0             # forecast portfolio vol cap = 2x target
+gross_leverage_cap = 2.0
+
+[execution]
+taker_fee = 0.0005
+maker_fee = 0.0002
+slippage_model = "square_root"
+slippage_min_bps = 2.0
+slippage_y = 1.0                   # monograph s.09 C-06: Y ~ 1
+band_relative = 0.25
+absolute_band_nav = "PENDING"
+partial_trading_ratio = "PENDING"
+executable_latency = "PENDING"
+research_nominal_usd = "PENDING"
+max_staleness = "PENDING"
+
+[stats]
+null_reps = 2000
+null_top_quantile = 0.01
+alpha_one_sided_level = 0.90
+dsr_threshold_prob = 0.95
+dsr_trial_effective_n = "PENDING"
+dsr_trial_sharpe_variance = "PENDING"
+bootstrap_block_rule = "PENDING"   # mean block >= mean holding period; freeze before looking
+
+[g0]
+data_sufficiency_thresholds = "PENDING"
