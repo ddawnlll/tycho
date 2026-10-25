@@ -1,0 +1,62 @@
+{
+  "name": "run_ledger_short_partial_close",
+  "description": "Short-side sign convention: two sells build a short average entry, then a partial buy closes part of it. realized = (exec - entry)*closed_qty*mult*sign(position) must come out positive when the short is covered lower.",
+  "derivation": "initial wallet 1000. AAA mult=1. FILL -4 @100 fee=0: entry=100, mark=100, qty=-4, wallet 1000, u=0. FILL -2 @115 fee=0: increasing the short, entry=(4*100+2*115)/(4+2)=(400+230)/6=630/6=105; mark=115; qty=-6; u=-6*1*(115-105)=-60; equity=1000-60=940. FILL +3 @90 fee=0: reducing, closed_qty=3, sign(position)=-1; realized=(90-105)*3*1*(-1)=(-15)*(-3)=+45; wallet=1000+45=1045; entry stays 105; qty=-3; mark=90; u=-3*1*(90-105)=-3*(-15)=+45; equity=1045+45=1090. Sanity: covering 3 of a 105 short at 90 earns (105-90)*3=45. Final: wallet 1045, unrealized 45, equity 1090, realized 45, fees 0, funding 0, position -3. Per-event equity processing order: [1000, 940, 1090].",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": -4.0,
+        "price": 100.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": -2.0,
+        "price": 115.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-03T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 3.0,
+        "price": 90.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 1045.0,
+    "equity": 1090.0,
+    "unrealized": 45.0,
+    "realized_cum": 45.0,
+    "fees_cum": 0.0,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": -3.0
+    },
+    "equity_series": [
+      1000.0,
+      940.0,
+      1090.0
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "rebalance_rounds_to_zero_no_trade",
+  "description": "A trade weight whose raw quantity rounds toward zero to 0 contracts is not traded (C-06 E: a target that rounds to zero after rounding is not traded). absolute_band_nav=0.00005 and partial_ratio=1.0 are explicit illustrative synthetic values (PENDING).",
+  "derivation": "equity=10000; AAA mult=1 mark=100, no position, step_size=1. target=0.0004 -> d=0.0004; threshold=max(0.25*0.0004, 0.00005)=max(0.0001, 0.00005)=0.0001; 0.0004 >= 0.0001 -> trade partial_ratio*d=0.0004. raw qty=0.0004*10000/100=0.04; step 1 -> round toward zero -> 0 contracts -> no trade. orders={}.",
+  "function": "rebalance_orders",
+  "inputs": {
+    "target_weights": {
+      "AAA": 0.0004
+    },
+    "positions": {},
+    "marks": {
+      "AAA": 100.0
+    },
+    "equity": 10000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "band_relative": 0.25,
+    "absolute_band_nav": 5e-05,
+    "partial_ratio": 1.0
+  },
+  "expected": {
+    "orders": {}
+  }
+}

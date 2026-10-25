@@ -1,0 +1,16 @@
+{
+  "name": "slippage_sqrt_binding",
+  "description": "A large order relative to ADV makes the square-root term bind: 20 bps beats the 2 bps floor. All numbers are chosen so the square root is exact by hand.",
+  "derivation": "order_notional=2.5e6, daily_vol=0.04, adv_notional=1e9, y=1.0, min_bps=2.0. ratio=2.5e6/1e9=0.0025; sqrt(0.0025)=0.05; raw=y*daily_vol*sqrt(ratio)*1e4=1.0*0.04*0.05*1e4=20.0 bps. slippage=max(2.0, 20.0)=20.0 bps.",
+  "function": "slippage_bps",
+  "inputs": {
+    "order_notional": 2500000.0,
+    "daily_vol": 0.04,
+    "adv_notional": 1000000000.0,
+    "y": 1.0,
+    "min_bps": 2.0
+  },
+  "expected": {
+    "bps": 20.0
+  }
+}

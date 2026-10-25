@@ -1,0 +1,69 @@
+{
+  "name": "run_ledger_funding_long_short",
+  "description": "Funding sign check: a long with positive rate pays (negative cashflow), a short with the same positive rate receives. Funding uses qty*mult*mark at the funding instant.",
+  "derivation": "initial wallet 1000. FILL AAA +2 @100 fee=0 slip=0: entry 100, mark 100, wallet 1000. FILL BBB -3 @50 fee=0 slip=0: entry 50, mark 50, wallet 1000; BBB signed notional=-3*1*50=-150. FUNDING AAA rate=0.0001 mark_price=100: signed notional=2*1*100=+200; cashflow=-200*0.0001=-0.02; wallet=999.98; funding_cum=-0.02. FUNDING BBB rate=0.0001 mark_price=50: signed notional=-3*1*50=-150; cashflow=-(-150)*0.0001=+0.015; wallet=999.98+0.015=999.995; funding_cum=-0.02+0.015=-0.005. Marks equal entries, so unrealized=0 for both; equity=999.995+0=999.995. Final: wallet 999.995, unrealized 0, equity 999.995, realized 0, fees 0, funding -0.005, positions AAA +2, BBB -3.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      },
+      "BBB": {
+        "instrument_id": "BBB",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 100.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "BBB",
+        "qty": -3.0,
+        "price": 50.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "FUNDING",
+        "instrument_id": "AAA",
+        "rate": 0.0001,
+        "mark_price": 100.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "FUNDING",
+        "instrument_id": "BBB",
+        "rate": 0.0001,
+        "mark_price": 50.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 999.995,
+    "equity": 999.995,
+    "unrealized": 0.0,
+    "realized_cum": 0.0,
+    "fees_cum": 0.0,
+    "funding_cum": -0.005,
+    "positions": {
+      "AAA": 2.0,
+      "BBB": -3.0
+    }
+  }
+}

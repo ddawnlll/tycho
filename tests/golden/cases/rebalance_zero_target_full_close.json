@@ -1,0 +1,34 @@
+{
+  "name": "rebalance_zero_target_full_close",
+  "description": "Zero target with a held position closes the full position with no band test and no partial ratio. min_notional=1000 is deliberately larger than the 100 notional being closed: the zero-target full close is allowed below min_notional. absolute_band_nav=0.02 and partial_ratio=0.5 are explicit illustrative synthetic values (PENDING in the monograph).",
+  "derivation": "equity=10000; AAA mult=1 mark=100, position 1. w_cur=1*100/10000=0.01. target=0 -> d=-0.01; zero target with qty != 0 -> trade the full d, band and partial ratio do not apply. qty=-0.01*10000/(1*100)=-1.0; step 1 keeps -1; notional=1*1*100=100 < min_notional=1000, but closing the entire position to a zero target is allowed (reduce to flat). orders={'AAA': -1.0}. Applying partial_ratio would trade -0.5 -> step 1 -> 0 (no trade); applying the band would block; both wrong here.",
+  "function": "rebalance_orders",
+  "inputs": {
+    "target_weights": {
+      "AAA": 0.0
+    },
+    "positions": {
+      "AAA": 1.0
+    },
+    "marks": {
+      "AAA": 100.0
+    },
+    "equity": 10000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1000.0
+      }
+    },
+    "band_relative": 0.25,
+    "absolute_band_nav": 0.02,
+    "partial_ratio": 0.5
+  },
+  "expected": {
+    "orders": {
+      "AAA": -1.0
+    }
+  }
+}

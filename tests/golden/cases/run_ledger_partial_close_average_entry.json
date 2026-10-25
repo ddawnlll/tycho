@@ -1,0 +1,62 @@
+{
+  "name": "run_ledger_partial_close_average_entry",
+  "description": "Two buys establish an average entry, then a partial sell realizes PnL against that average; the remaining position keeps the same entry.",
+  "derivation": "initial wallet 1000. AAA mult=1. FILL +2 @100 fee=0: entry=100, mark=100, wallet 1000, unrealized=0. FILL +2 @110 fee=0: increasing, entry=(2*100+2*110)/(2+2)=420/4=105; mark=110; wallet 1000; unrealized=4*1*(110-105)=4*5=20; equity=1020. FILL -1 @120 fee=0: reducing; closed_qty=1; sign(position)=+1; realized=(120-105)*1*1*(+1)=15; wallet=1000+15=1015; realized_cum=15; entry stays 105; mark=120 (fill price); remaining qty=3; unrealized=3*1*(120-105)=3*15=45; equity=1015+45=1060. Final: wallet 1015, unrealized 45, equity 1060, realized 15, fees 0, funding 0, position +3. Per-event equity processing order: [1000, 1020, 1060].",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 100.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 110.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-03T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": -1.0,
+        "price": 120.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 1015.0,
+    "equity": 1060.0,
+    "unrealized": 45.0,
+    "realized_cum": 15.0,
+    "fees_cum": 0.0,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": 3.0
+    },
+    "equity_series": [
+      1000.0,
+      1020.0,
+      1060.0
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "run_ledger_partial_fill_cancel",
+  "description": "An intended 10-contract order is partially filled for 4 and the rest is cancelled: the ledger only ever sees a FILL of +4, so position and fee reflect 4 contracts, never the intended 10.",
+  "derivation": "initial wallet 1000. AAA mult=1. Only FILL +4 @100 fee_rate=0.0005 slip=0 is booked: fee=4*1*100*0.0005=0.2; wallet=999.8; entry=100; mark=100; u=0; equity=999.8. The cancelled remainder (10-4=6) never fills and has no event, so no cash and no fee. MARK 102: u=4*1*(102-100)=8; equity=999.8+8=1007.8. Final: wallet 999.8, unrealized 8, equity 1007.8, realized 0, fees 0.2, funding 0, position +4. Booking the intended 10 would give position 10, fee 0.5, u 20, equity 1019.5; expected numbers pin the partial fill.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 4.0,
+        "price": 100.0,
+        "fee_rate": 0.0005,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "AAA",
+        "mark_price": 102.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 999.8,
+    "equity": 1007.8,
+    "unrealized": 8.0,
+    "realized_cum": 0.0,
+    "fees_cum": 0.2,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": 4.0
+    }
+  }
+}

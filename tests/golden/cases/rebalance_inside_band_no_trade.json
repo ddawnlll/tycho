@@ -1,0 +1,32 @@
+{
+  "name": "rebalance_inside_band_no_trade",
+  "description": "Drifted weight is inside the no-trade band, so no order. band_relative=0.25 is the registry example; absolute_band_nav=0.02 and partial_ratio=0.5 are explicit illustrative synthetic values (both PENDING in the monograph, not real parameters).",
+  "derivation": "equity=10000; AAA mult=1 mark=100, position 10. w_cur=10*1*100/10000=0.10. target=0.11 -> d=0.11-0.10=0.01. threshold=max(band_relative*abs(target), absolute_band_nav)=max(0.25*0.11, 0.02)=max(0.0275, 0.02)=0.0275. abs(d)=0.01 < 0.0275 -> no trade. orders={}.",
+  "function": "rebalance_orders",
+  "inputs": {
+    "target_weights": {
+      "AAA": 0.11
+    },
+    "positions": {
+      "AAA": 10.0
+    },
+    "marks": {
+      "AAA": 100.0
+    },
+    "equity": 10000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "band_relative": 0.25,
+    "absolute_band_nav": 0.02,
+    "partial_ratio": 0.5
+  },
+  "expected": {
+    "orders": {}
+  }
+}
