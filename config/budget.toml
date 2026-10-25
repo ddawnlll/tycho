@@ -1,5 +1,5 @@
 # Owner sets this. Empty = Modal jobs BLOCKED (run small local samples instead).
 MODAL_USD_CAP = ""
-# Stop at 80% of cap and record in PROGRESS.md.
+# Stop at 80% of cap and record in PROGRESS.md (owner instruction 2026-10-25, not from the monograph).
 MODAL_STOP_FRACTION = 0.8
 MODAL_MAX_CONCURRENT = 2
