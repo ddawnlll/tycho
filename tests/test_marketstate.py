@@ -386,7 +386,9 @@ def test_factor_cache_uses_the_five_element_key(provider):
     names = ("ma_20", "ewma_vol_60d")
 
     first = provider.factors(snapshot, names, CONVENTION)
-    assert provider.factors(snapshot, names, CONVENTION) is first
+    second = provider.factors(snapshot, names, CONVENTION)
+    # a copy per call, but the cache is hit: equal content, same key
+    pd.testing.assert_frame_equal(first.values, second.values)
     assert first.snapshot_id == snapshot.snapshot_id
     pd.testing.assert_frame_equal(
         first.values, compute_factors(snapshot, names, CONVENTION).values
@@ -399,13 +401,61 @@ def test_factor_cache_uses_the_five_element_key(provider):
         snapshot.request_hash,
         first.feature_code_hash,
     )
-    assert provider._factor_cache[key] is first
+    assert key in provider._factor_cache
+    assert provider._factor_cache[key].values.equals(first.values)
     # the snapshot cache keeps its own key, with the feature slot still empty
     assert (snapshot.dataset_hash, snapshot.as_of, snapshot.universe_hash,
             snapshot.request_hash, "") in provider._cache
 
     other = {"kind": "halflife", "value": 30.0, "returns": "simple", "min_periods": 5}
-    second = provider.factors(snapshot, names, other)
-    assert second is not first
-    assert second.feature_code_hash != first.feature_code_hash
+    third = provider.factors(snapshot, names, other)
+    assert third.feature_code_hash != first.feature_code_hash
     assert len(provider._factor_cache) == 2
+
+
+def test_factor_cache_returns_a_defensive_copy(provider):
+    snapshot = provider.resolve(request("2019-11-10"))
+    names = ("ma_20", "ewma_vol_60d")
+    first = provider.factors(snapshot, names, CONVENTION)
+    expected = first.values.copy()
+
+    first.values.iloc[:, :] = -1.0
+    again = provider.factors(snapshot, names, CONVENTION)
+    pd.testing.assert_frame_equal(again.values, expected)
+    assert not (again.values == -1.0).any().any()
+
+
+def test_feature_hash_is_order_sensitive_and_frames_keep_the_requested_order(provider):
+    snapshot = provider.resolve(request("2019-11-10"))
+    forward = ("ma_20", "close", "ma_50")
+    backward = ("ma_50", "close", "ma_20")
+
+    first = provider.factors(snapshot, forward, CONVENTION)
+    second = provider.factors(snapshot, backward, CONVENTION)
+
+    assert first.feature_code_hash != second.feature_code_hash
+    assert list(first.values.columns) == list(forward)
+    assert list(second.values.columns) == list(backward)
+    pd.testing.assert_frame_equal(
+        first.values[list(backward)], second.values[list(backward)]
+    )
+
+
+def test_lookback_rejects_non_1d_and_missing_1d(provider):
+    with pytest.raises(ValueError, match="only provides 1d"):
+        provider.resolve(
+            request("2019-11-10", timeframes=(("4h", 60, ("close",)),))
+        )
+    with pytest.raises(ValueError, match="'1d'"):
+        provider.resolve(request("2019-11-10", timeframes=()))
+
+
+def test_bar_with_bad_quality_marks_the_instrument(provider, tape):
+    day = "2019-11-09"
+    bar = _bar(tape, "BTCUSDT", day)
+    tape.bars_1d.loc[bar.name, "quality"] = "gap"
+
+    availability = provider.resolve(request("2019-11-10 12:00")).availability
+    assert bool(availability.loc["BTCUSDT", "bad_quality"])
+    assert availability.loc["BTCUSDT", "quality_flags"] == ("gap",)
+    assert not bool(availability.loc["LINKUSDT", "bad_quality"])

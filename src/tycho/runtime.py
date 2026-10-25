@@ -3,7 +3,13 @@
 import dataclasses
 import hashlib
 
-from .contracts import ExpertManifest, ExpertSignal, SnapshotRef, canonical_hash
+from .contracts import (
+    ExpertManifest,
+    ExpertSignal,
+    FactorFrame,
+    SnapshotRef,
+    canonical_hash,
+)
 
 
 def make_manifest(expert_module_source: str, params: dict, **fields) -> ExpertManifest:
@@ -33,7 +39,8 @@ def run_expert(expert, provider, as_of, factor_fn) -> list[ExpertSignal]:
     universe = snapshot.universe
     # The provider's cached snapshot must never leave this function mutable.
     handoff = _defensive_copy(snapshot)
-    factor_frame = factor_fn(handoff)
+    # A factor_fn may hand back a cached frame: the expert gets a copy, never it.
+    factor_frame = _copy_frame(factor_fn(handoff))
     signals = expert.signal(handoff, factor_frame)
     _enforce(signals, manifest, snapshot, availability, universe)
     return signals
@@ -45,6 +52,10 @@ def _defensive_copy(snapshot: SnapshotRef) -> SnapshotRef:
         bars=snapshot.bars.copy(),
         availability=snapshot.availability.copy(),
     )
+
+
+def _copy_frame(frame: FactorFrame) -> FactorFrame:
+    return dataclasses.replace(frame, values=frame.values.copy())
 
 
 def _enforce(signals, manifest, snapshot, availability, universe) -> None:
@@ -68,11 +79,18 @@ def _enforce(signals, manifest, snapshot, availability, universe) -> None:
             raise ValueError(f"more than one signal for {signal.instrument_id!r}")
         seen.add(signal.instrument_id)
         row = availability.loc[signal.instrument_id]
-        unavailable = bool(row["missing"] or row["stale"] or row["delisted"])
+        # bad_quality is read defensively: hand-built availability frames from
+        # before that column existed must keep working.
+        unavailable = bool(
+            row["missing"]
+            or row["stale"]
+            or row["delisted"]
+            or row.get("bad_quality", False)
+        )
         if unavailable and signal.direction != "ABSTAIN":
             # An earlier signal is never silently extended over bad data.
             raise ValueError(
-                f"{signal.instrument_id}: non-ABSTAIN signal on missing/stale/delisted data"
+                f"{signal.instrument_id}: non-ABSTAIN signal on missing/stale/delisted/bad-quality data"
             )
     absent = universe - seen
     if absent:

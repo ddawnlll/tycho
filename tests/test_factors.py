@@ -181,3 +181,17 @@ def test_ewma_cov_diagonal_equals_ewma_vol_squared():
         vol_squared = factors.values.loc[iid, "ewma_vol_60d"] ** 2
         assert cov.loc[iid, iid] == pytest.approx(vol_squared, rel=1e-12)
     assert cov.loc["AAA", "BBB"] == pytest.approx(cov.loc["BBB", "AAA"])
+
+
+def test_factor_name_order_is_part_of_the_hash_and_the_columns():
+    snapshot = tiny_snapshot({"AAA": list(np.linspace(1.0, 2.0, 30))})
+    forward = ("ma_20", "close")
+    backward = ("close", "ma_20")
+
+    first = compute_factors(snapshot, forward, CONVENTION)
+    second = compute_factors(snapshot, backward, CONVENTION)
+
+    assert first.feature_code_hash != second.feature_code_hash
+    assert list(first.values.columns) == list(forward)
+    assert list(second.values.columns) == list(backward)
+    pd.testing.assert_frame_equal(first.values[list(backward)], second.values)
