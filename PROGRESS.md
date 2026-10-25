@@ -89,3 +89,4 @@
 - Baseline integrated-main suite: `uv run pytest -q` → `186 passed in 49.45s`.
 - #28 worker found undefined null/baseline semantics and opened owner decision #46; no code guessed. Independent #30 dispatched instead. Modal remains out of scope under skill/PLAN; local synthetic computations only.
 - V0 (#7) FAIL: locked-worktree double-force deletion contradicts #4; archive git reads ignore failure. Focused implementation blocker #48 opened; no cleanup executed on active worktrees.
+- Blind worker committed tolerances first (`26f1d9b`), opened #45 for undefined zero-crossing policy and #47 for a missing scanner API contract. Coordinator supplied only the public interface (not implementation) in `docs/scanner-interface.md` and #47; no tolerance changes.
