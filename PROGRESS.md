@@ -60,3 +60,5 @@
 - Minor not fixed: ExpertManifest follows the 08A.4 text (`id`, no `snapshot_schema`) while the registry lists `expert_id` and `snapshot_schema`. Text/registry field-name divergence; no behaviour depends on it. Recorded, not resolved.
 - M3 worker notes: vectorized.trend_panels has a `shortcut:` (revisions applied from their stamp row); target_weights raises on a non-PSD covariance (no repair).
 - docs/ledger-spec.md: the zero-crossing rule is a coordinator interpretation (monograph says "include zero-crossing rules" without content); flagged for re-check before prereg.
+
+### T2.4 merged (121 passed). Note: resolve() now raises on an empty universe, so callers iterating early dates must handle it.
