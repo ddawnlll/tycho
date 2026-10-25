@@ -30,3 +30,8 @@
 ### M1 — G0 FEASIBILITY-DATA tooling (workflow wf_417237d0-962)
 - T1.1 tape/synthetic, T1.2 audit DONE, merged; suite 35 passed. The G0 real run stays BLOCKED (dev_end_date and thresholds PENDING); on the synthetic tape the CLI verdict is BLOCKED, as intended.
 - Worker notes for owner review: funding expected-count uses the latest spec's interval (understates if the interval changes mid-life on real data); history is counted in distinct bar days.
+
+### 2026-10-25 — Owner decision: cancel every owner-dependent item
+- The owner cancelled all items waiting on them: OS-level guard/golden/prereg lock, every real-data run (dev_end_date), Modal runs (MODAL_USD_CAP), prereg lock / G1, G5 holdout, the full joint-power run, and the window-length conflict resolution.
+- PENDING parameters stay PENDING in config; the code keeps taking them as required arguments and refusing real runs. Nothing is guessed.
+- Stop condition is now: every non-cancelled item [x] and the last milestone passes the verifier.
