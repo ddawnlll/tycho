@@ -35,3 +35,9 @@
 - The owner cancelled all items waiting on them: OS-level guard/golden/prereg lock, every real-data run (dev_end_date), Modal runs (MODAL_USD_CAP), prereg lock / G1, G5 holdout, the full joint-power run, and the window-length conflict resolution.
 - PENDING parameters stay PENDING in config; the code keeps taking them as required arguments and refusing real runs. Nothing is guessed.
 - Stop condition is now: every non-cancelled item [x] and the last milestone passes the verifier.
+
+### M0 verifier (wf_4e6413d1-3f8): FAIL
+- Blocker: cleanup.py loses untracked files when removing a worktree. Majors: symlink escape, hardcoded `main`, locked-worktree crash, --repo not required to be the main worktree → fixing in T0.5.
+- Guard (major): heuristic Bash matching misses relative paths (`cd data && cat holdout/x`), `python3 -c`, `install`, `rm -rf .claude`; Grep/Glob `glob` fields are not checked. The guard is immutable to agents and the coordinator by design; with the owner lock cancelled this stays a **known residual risk**. Mitigation: data/ is gitignored, so ripgrep-based Grep skips it by default.
+- Minor: require() empty-string branch untested; MODAL_STOP_FRACTION source is now documented (owner instruction).
+- `/exit` interrupted the M1 verifier and T2.2/T2.3; T2.1 had finished and is merged (50 tests pass). T2.2/T2.3 restarted (wf_a7dad3fa-170), M1 verifier re-run.

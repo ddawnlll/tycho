@@ -8,6 +8,8 @@ Markers: `[CANCELLED owner 2026-10-25]` owner cancelled every item that waited o
 - [x] T0.1 pyproject (uv; numpy, pandas, pyarrow, arch, statsmodels, pytest), `src/tycho` package, smoke test — `uv run pytest -q tests/test_smoke.py`
 - [x] T0.2 guard hook `.claude/hooks/guard.py` + deny rules: holdout/secrets/keys deny all; golden + prereg/locked write-once; guard files immutable; Binance data hosts blocked — `uv run pytest -q tests/test_guard.py`
 - [x] T0.3 `scripts/cleanup.py`: allowlist, dry-run by default, archives unmerged worktree patches to runs/archive/, never deletes the protected set — `uv run pytest -q tests/test_cleanup.py`
+- [ ] T0.5 cleanup.py fixes from the M0 verifier (untracked files lost on worktree removal, symlink escape, hardcoded main, locked worktrees, --repo must be the main worktree) — `uv run pytest -q tests/test_cleanup.py`
+- [CANCELLED owner 2026-10-25] guard hardening (M0 verifier: relative-path Bash bypasses, python3 -c, rm -rf .claude, Grep/Glob glob field). The guard protects itself, so only the owner can change it
 - [CANCELLED owner 2026-10-25] OS-level lock of the guard, golden and prereg (chattr +i / separate user / branch protection); the hook is a heuristic guard only
 
 ## M1 — G0 FEASIBILITY-DATA (F1)
