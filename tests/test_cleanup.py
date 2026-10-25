@@ -3,8 +3,10 @@
 import hashlib
 import json
 import os
+import importlib.util
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -168,4 +170,159 @@ def test_protected_candidate_aborts(tmp_path, fake_cache_bin):
     assert "protected" in (out.stdout + out.stderr).lower()
     assert (cached / "t.pyc").exists()
     assert (repo / "PROGRESS.md").read_text() == before
+    assert not (repo / "runs" / "cleanup" / "last_dryrun.json").exists()
+
+
+def test_untracked_files_archived_before_worktree_removal(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+    (unmerged / "scratch.txt").write_text("unsaved notes\n")
+
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+
+    assert applied.returncode == 0, applied.stderr
+    assert not unmerged.exists()
+    archive = repo / "runs" / "archive" / "wt_unmerged.untracked.tar.gz"
+    assert archive.is_file()
+    with tarfile.open(archive) as tar:
+        assert tar.extractfile("scratch.txt").read() == b"unsaved notes\n"
+    assert "wt_unmerged.untracked.tar.gz" in applied.stdout
+
+
+def test_archive_failure_keeps_worktree(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, merged, unmerged = build_repo(tmp_path)
+    (unmerged / "scratch.txt").write_text("unsaved\n")
+    # A directory where the untracked archive must be written makes that write fail.
+    (repo / "runs" / "archive" / "wt_unmerged.untracked.tar.gz").mkdir(parents=True)
+
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+
+    assert applied.returncode == 1
+    assert unmerged.exists() and (unmerged / "scratch.txt").exists()
+    assert not merged.exists()
+    progress = (repo / "PROGRESS.md").read_text()
+    assert "### Cleanup applied" in progress
+    assert "kept: archive failed" in progress
+    assert "wt_unmerged" in progress
+
+
+def test_symlinked_candidates_and_roots_skipped(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, _, _ = build_repo(tmp_path)
+    outside = tmp_path / "outside"
+    (outside / "modalcopy").mkdir(parents=True)
+    digest = hashlib.sha256(b"outside").hexdigest()
+    (outside / "modalcopy" / "VERIFIED").write_text(digest + "\n")
+    (outside / "modalcopy" / "local.sha256").write_text(digest + "\n")
+    (outside / "keep.txt").write_text("must survive\n")
+
+    (repo / "logs" / "escape.log.1").symlink_to(outside / "keep.txt")
+    (repo / "runs" / "modal" / "linkdir").symlink_to(outside / "modalcopy")
+    fake_tmp = tmp_path / "fake_tmp"
+    fake_tmp.mkdir()
+    (fake_tmp / "victim.txt").write_text("must survive\n")
+    (repo / "tmp").rename(tmp_path / "real_tmp")
+    (repo / "tmp").symlink_to(fake_tmp)
+
+    dry = run_cleanup(repo, "--include-worktrees", pathdir=bindir)
+    assert dry.returncode == 0, dry.stderr
+    rows = json.loads((repo / "runs" / "cleanup" / "last_dryrun.json").read_text())["candidates"]
+    paths = {c["path"] for c in rows}
+    assert "logs/escape.log.1" not in paths
+    assert "runs/modal/linkdir" not in paths
+    assert not any(p.startswith("tmp/") for p in paths)
+
+    applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+    assert applied.returncode == 0, applied.stderr
+    assert (repo / "logs" / "escape.log.1").is_symlink()
+    assert (repo / "runs" / "modal" / "linkdir").is_symlink()
+    assert (outside / "keep.txt").read_text() == "must survive\n"
+    assert (outside / "modalcopy" / "VERIFIED").is_file()
+    assert (fake_tmp / "victim.txt").read_text() == "must survive\n"
+
+
+def test_protected_check_uses_realpath(tmp_path):
+    spec = importlib.util.spec_from_file_location("cleanup", SCRIPT)
+    cleanup = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cleanup)
+    repo = tmp_path / "repo"
+    (repo / "config").mkdir(parents=True)
+    (repo / "link").symlink_to(repo / "config")
+
+    assert cleanup.protected(repo, repo / "config" / "__pycache__")
+    assert cleanup.protected(repo, repo / "link" / "__pycache__")
+    assert not cleanup.protected(repo, repo / "tmp" / "__pycache__")
+
+
+def test_base_branch_detected_from_main_worktree(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, merged, unmerged = build_repo(tmp_path)
+    git(repo, "branch", "-m", "main", "trunk")  # base is not hardcoded to 'main'
+
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+
+    assert applied.returncode == 0, applied.stderr
+    assert not merged.exists() and not unmerged.exists()
+    assert "feature work" in (repo / "runs" / "archive" / "wt_unmerged.patch").read_text()
+
+
+def test_undetectable_base_keeps_worktree_with_commits(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, merged, unmerged = build_repo(tmp_path)
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    # A detached main worktree has no branch to serve as the base.
+    git(repo, "checkout", "-q", "--detach", "HEAD")
+
+    applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+
+    assert applied.returncode == 1
+    assert unmerged.exists()
+    assert not merged.exists()
+    progress = (repo / "PROGRESS.md").read_text()
+    assert "### Cleanup applied" in progress
+    assert "base branch undetected" in progress
+
+
+def test_locked_worktree_removed_with_double_force(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+    git(repo, "worktree", "lock", str(unmerged))
+
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+
+    assert applied.returncode == 0, applied.stderr
+    assert not unmerged.exists()
+
+
+def test_removal_failure_recorded_others_continue(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, merged, unmerged = build_repo(tmp_path)
+    # A bogus .git file makes `git worktree remove` fail for this worktree only.
+    (unmerged / ".git").write_text("garbage\n")
+
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+
+    assert applied.returncode == 1
+    assert unmerged.exists()
+    assert not merged.exists()
+    progress = (repo / "PROGRESS.md").read_text()
+    assert "### Cleanup applied" in progress
+    assert "wt_unmerged" in progress and "FAILED" in progress
+    assert "wt_merged" in progress and "removed" in progress
+
+
+def test_repo_must_be_main_worktree(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+
+    out = run_cleanup(unmerged, "--include-worktrees", pathdir=bindir)
+
+    assert out.returncode != 0
+    assert "main worktree" in out.stderr
     assert not (repo / "runs" / "cleanup" / "last_dryrun.json").exists()
