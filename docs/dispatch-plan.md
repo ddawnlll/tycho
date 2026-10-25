@@ -1,13 +1,12 @@
 # Dispatch plan — 18 open issues (2026-10-25)
 
-For the coordinator agent that spawns workers. Machine: **2 CPUs, ~2 GiB free RAM**. Monograph hard cap: **4 simultaneous LLM sessions** (D-27). Full suite takes ~40 s, so more than 4 parallel sessions only adds CPU contention.
+For the coordinator agent that spawns workers. Monograph hard cap: **4 simultaneous LLM sessions** (D-27), on any machine.
 
 ## 0. Before spawning anything (coordinator, 5 min)
 
 1. **In-flight work — do not duplicate:**
-   - M5 workflow `wf_cba2f011-ece`: branch `worktree-wf_cba2f011-ece-2` has **T5.2 done** (commit 647d4ad, not merged). `-ece-1` is locked (likely T5.1 still running). Merge T5.2 and close #29 when its tests pass; spawn T5.1 only if `-ece-1` has stopped.
-   - **V4 (#27)** is running. Do not respawn it.
-   - `wf_58f3cda6-564-2` is locked at fe5cd86. Check whether it is T3.4 before spawning slot A.
+   - Branch `origin/t5.2-dsr-bootstrap-alpha` has **T5.2 done** (commit 647d4ad, not merged). Merge it and close #29 when its tests pass.
+   - Earlier orchestrator runs (T5.1, V4, T3.4) were stopped without results on GitHub. Treat every issue that is still open as not started.
 2. **Rules that override the issue DoD** (to avoid merge conflicts between parallel workers):
    - Workers do **not** edit PLAN.md or PROGRESS.md. They put notes in the PR body or closing comment. The coordinator updates both on merge.
    - Workers run only their own acceptance test while iterating and the full suite **once** before the PR (CPU).
@@ -31,9 +30,9 @@ A  T3.4 #43 ───────────► V3 #20 ─────► T6.2 
 B  T6.1 #35 ───────────► T7.1 #38 (needs config/parity.toml) ──────────┼──► V7 #39
 C  T5.1 #28* ─► T5.3 #30 ─► T5.4 #31 ─► T5.5 #32 ─► V5 #34 ────────────┘
 D  V0 #7 ─► V1 #11 ─► V2 #15 ─► T4.4 #25
-   (V4 #27 already running; merge T5.2 #29 from its branch)
+   (V4 #27 first in slot D if still open; merge T5.2 #29 from origin/t5.2-dsr-bootstrap-alpha)
 ```
-`*` T5.1: skip if the running M5 workflow finishes it.
+`*` V4 (#27) runs at the start of slot D's queue if it is still open.
 
 **Critical path:** slot C (M5 chain, 4 sequential tasks + V5) and slot B (T6.1 → T7.1). Everything else fits beside them. Expect about 5 worker rounds instead of 18 sequential ones.
 
@@ -64,7 +63,6 @@ D  V0 #7 ─► V1 #11 ─► V2 #15 ─► T4.4 #25
 | 4 | **T5.5** [#32](https://github.com/ddawnlll/tycho/issues/32) | src/tycho/power.py, tests/test_power.py | T5.4 merged | cheap |
 | 5 | **V5** [#34](https://github.com/ddawnlll/tycho/issues/34) | read-only | T5.5 merged | cheap, fresh |
 
-- The running M5 workflow numbers tasks differently (its T5.3 = gates, its T5.4 = power). Map its branches to plan T5.4/T5.5 before spawning, so no task runs twice.
 - T5.3 re-runs the pipeline per MA period. If `e001.py` needs a parameter for that, coordinate with slot A (T3.4 does not touch e001.py; T6.2 might).
 
 ### Slot D — cheap sweep: old verifiers, then T4.4 (one cheap session, sequential)
@@ -90,7 +88,7 @@ Verifier output: set the Verdict in the issue. Every blocker/major becomes a new
 ## 5. Spawn prompt template (per worker)
 
 ```text
-You are a Tycho worker. Repo: /home/admin/final (own git worktree).
+You are a Tycho worker in your own git worktree of the Tycho repo.
 Task: GitHub issue #<n> in ddawnlll/tycho. Run `gh issue view <n>` and follow it exactly.
 Read CLAUDE.md first. Read only the monograph sections the issue lists (grep by phrase; never read the whole HTML).
 Never guess PENDING values; never touch data/holdout, tests/golden, prereg/locked, .claude/.
