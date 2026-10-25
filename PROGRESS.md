@@ -79,3 +79,6 @@
 ### M3 verifier (wf_4bf0a3cb-a4f): FAIL → T3.4 (after T2.5, shared factors.py)
 - Blocker: vectorized.trend_panels builds from the end-of-tape view → later revisions leak into earlier rows (PIT violation).
 - Majors: cov evaluated one bar before the decision time (equality unverified when caps bind); NaN latest close silently falls back to the previous close; ABSTAIN → weight not a required arg (`on_abstain`); MA NaN handling differs between panel and snapshot.
+
+## 2026-10-26 — Session 2 (Orchestrator)
+- T5.2 (#29) merged from `origin/t5.2-dsr-bootstrap-alpha` (commit `647d4ad`): DSR, stationary block bootstrap, HAC beta-adjusted alpha (`11 passed` in `test_stats.py`, `186 passed` full suite).

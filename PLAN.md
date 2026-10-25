@@ -472,7 +472,7 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
 
 ### M5 — Null / bootstrap / DSR / gates (F2 code) — [milestone](https://github.com/ddawnlll/tycho/milestone/6)
 
-Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthetic joint power. Open: 6/7.
+Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthetic joint power. Open: 5/7.
 
 - [ ] **T5.1** Baselines + hand-written null generators — [#28](https://github.com/ddawnlll/tycho/issues/28)
   - **Goal:** The comparison set every E-001 result is judged against, with nulls that preserve exposure so they cannot be passed trivially.
@@ -499,7 +499,7 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
   - **PENDING / BLOCKED:** —
   - **Out of scope:** Choosing the null after seeing results; daily scrambling.
   - **Depends on:** T4.3 [#24](https://github.com/ddawnlll/tycho/issues/24)
-- [ ] **T5.2** DSR (hand-written), stationary block bootstrap (arch), HAC beta-adjusted alpha (statsmodels) — [#29](https://github.com/ddawnlll/tycho/issues/29)
+- [x] **T5.2** DSR (hand-written), stationary block bootstrap (arch), HAC beta-adjusted alpha (statsmodels) — [#29](https://github.com/ddawnlll/tycho/issues/29)
   - **Goal:** The statistics behind pass criteria 1 and 2.
   - **Read in the monograph:**
     - §04 `#kanit` → Bailey & López de Prado 2014 (DSR)
