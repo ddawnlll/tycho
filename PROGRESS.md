@@ -21,3 +21,8 @@
 - [OWNER] E-001 prereg lock (G1); G5 holdout.
 - PENDING (monograph open): research nominal, absolute band NAV floor, partial trading ratio, EWMA convention, executable latency, max_staleness, DSR N_eff + trial Sharpe variance, bootstrap block rule, G0 sufficiency thresholds.
 - BLOCKED (text/registry conflict): live window length 400 (§08) vs registry warmup "not universal 400" / lookback 260.
+
+### M0 — skeleton (workflow wf_49eb6840-ca0)
+- T0.1, T0.2, T0.3 DONE (DeepSeek workers in worktrees), merged into main; `uv run pytest -q` → 18 passed.
+- Guard hook is live in the coordinator session: a Bash read of the protected key directory was blocked.
+- Worker worktrees live under .claude/worktrees/ (now gitignored); cleanup.py --include-worktrees removes them between workflows.

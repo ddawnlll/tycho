@@ -5,9 +5,9 @@ Markers: `[x]` acceptance test passes · `[ ]` open · `[BLOCKED]` reason given 
 
 ## M0 — Skeleton
 - [x] CLAUDE.md, PLAN.md, PROGRESS.md, config/tycho.toml (PENDING kept), config/budget.toml
-- [ ] T0.1 pyproject (uv; numpy, pandas, pyarrow, arch, statsmodels, pytest), `src/tycho` package, smoke test — `uv run pytest -q tests/test_smoke.py`
-- [ ] T0.2 guard hook `.claude/hooks/guard.py` + deny rules: holdout/secrets/keys deny all; golden + prereg/locked write-once; guard files immutable; Binance data hosts blocked — `uv run pytest -q tests/test_guard.py`
-- [ ] T0.3 `scripts/cleanup.py`: allowlist, dry-run by default, archives unmerged worktree patches to runs/archive/, never deletes the protected set — `uv run pytest -q tests/test_cleanup.py`
+- [x] T0.1 pyproject (uv; numpy, pandas, pyarrow, arch, statsmodels, pytest), `src/tycho` package, smoke test — `uv run pytest -q tests/test_smoke.py`
+- [x] T0.2 guard hook `.claude/hooks/guard.py` + deny rules: holdout/secrets/keys deny all; golden + prereg/locked write-once; guard files immutable; Binance data hosts blocked — `uv run pytest -q tests/test_guard.py`
+- [x] T0.3 `scripts/cleanup.py`: allowlist, dry-run by default, archives unmerged worktree patches to runs/archive/, never deletes the protected set — `uv run pytest -q tests/test_cleanup.py`
 - [OWNER] OS-level lock of the guard, golden and prereg (chattr +i / separate user / branch protection); the hook is a heuristic guard only
 
 ## M1 — G0 FEASIBILITY-DATA (F1)
