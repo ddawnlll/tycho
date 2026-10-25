@@ -41,3 +41,5 @@
 - Guard (major): heuristic Bash matching misses relative paths (`cd data && cat holdout/x`), `python3 -c`, `install`, `rm -rf .claude`; Grep/Glob `glob` fields are not checked. The guard is immutable to agents and the coordinator by design; with the owner lock cancelled this stays a **known residual risk**. Mitigation: data/ is gitignored, so ripgrep-based Grep skips it by default.
 - Minor: require() empty-string branch untested; MODAL_STOP_FRACTION source is now documented (owner instruction).
 - `/exit` interrupted the M1 verifier and T2.2/T2.3; T2.1 had finished and is merged (50 tests pass). T2.2/T2.3 restarted (wf_a7dad3fa-170), M1 verifier re-run.
+
+### M2 (wf_a9f6354e-534) — T2.1/T2.2/T2.3 DONE, merged. The /exit did not stop this workflow; the duplicate rerun (wf_a7dad3fa-170) should skip via runs/ results. Worker note: ewma_cov has no PSD repair (relevant for the 2x vol cap).

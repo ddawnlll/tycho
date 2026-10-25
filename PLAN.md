@@ -18,9 +18,9 @@ Markers: `[CANCELLED owner 2026-10-25]` owner cancelled every item that waited o
 - [CANCELLED owner 2026-10-25] G0 run on real Binance data — dev_end_date PENDING [OWNER], G0 sufficiency thresholds PENDING
 
 ## M2 — MarketState / Factor / ExpertSignal (F3)
-- [ ] T2.1 contracts (MarketStateRequest v1, SnapshotRef, FactorFrame, ExpertManifest, ExpertSignal) + C-01 provider: available_at<=as_of, closed bars only, PIT top-30 universe, immutable snapshot_id, cache key (dataset_hash, as_of, universe_hash, request_hash, feature_code_hash) — `tests/test_marketstate.py` (future-event injection leaves past snapshots byte-identical; revisions; missing data → ABSTAIN metadata)
-- [ ] T2.2 C-02 factors MA20/50/100/200, EWMA_VOL_60D (convention = required argument), trailing_30d_liquidity; versioned code hash — `tests/test_factors.py`
-- [ ] T2.3 C-03 expert runtime + manifest hashing, ABSTAIN on missing/stale, no direct data access — `tests/test_expert_runtime.py`
+- [x] T2.1 contracts (MarketStateRequest v1, SnapshotRef, FactorFrame, ExpertManifest, ExpertSignal) + C-01 provider: available_at<=as_of, closed bars only, PIT top-30 universe, immutable snapshot_id, cache key (dataset_hash, as_of, universe_hash, request_hash, feature_code_hash) — `tests/test_marketstate.py` (future-event injection leaves past snapshots byte-identical; revisions; missing data → ABSTAIN metadata)
+- [x] T2.2 C-02 factors MA20/50/100/200, EWMA_VOL_60D (convention = required argument), trailing_30d_liquidity; versioned code hash — `tests/test_factors.py`
+- [x] T2.3 C-03 expert runtime + manifest hashing, ABSTAIN on missing/stale, no direct data access — `tests/test_expert_runtime.py`
 
 ## M3 — EXP-TREND-E001
 - [ ] T3.1 EXP-TREND-E001: score = mean sign(P/MA_k − 1), k∈{20,50,100,200}, direction, abstain — `tests/test_exp_trend.py`
