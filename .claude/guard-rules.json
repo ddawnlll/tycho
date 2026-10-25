@@ -1,0 +1,6 @@
+{
+  "deny": ["data/holdout/", "secrets/", ".env", "*.key", "*.pem", ".modal.toml"],
+  "write_once": ["tests/golden/", "prereg/locked/"],
+  "immutable": [".claude/hooks/", ".claude/settings.json", ".claude/guard-rules.json"],
+  "blocked_hosts": ["binance.com", "binance.vision"]
+}

@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Edit|Write|MultiEdit|NotebookEdit|Bash|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py\""
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Read(./data/holdout/**)",
+      "Read(./secrets/**)",
+      "Edit(./tests/golden/**)",
+      "Edit(./prereg/locked/**)",
+      "Edit(./.claude/**)",
+      "WebFetch(domain:binance.com)",
+      "WebFetch(domain:binance.vision)"
+    ]
+  }
+}
