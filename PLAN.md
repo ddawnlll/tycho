@@ -107,7 +107,7 @@ Package, config with PENDING kept, guard hook, cleanup script. Open: 2/7.
 - [x] **T0.3** scripts/cleanup.py: allowlisted, dry-run default, archives worktrees — [#3](https://github.com/ddawnlll/tycho/issues/3)  
   Commit d4169ab.
   Acceptance: `uv run pytest -q tests/test_cleanup.py`
-- [ ] **T0.5** cleanup.py fixes from the M0 verifier — [#4](https://github.com/ddawnlll/tycho/issues/4)
+- [x] **T0.5** cleanup.py fixes from the M0 verifier — [#4](https://github.com/ddawnlll/tycho/issues/4)
   - **Goal:** Close the five M0 verifier findings so cleanup can never lose work or escape the repo.
   - **Read in the monograph:**
     - Not a monograph item. Findings: PROGRESS.md → "M0 verifier (wf_4e6413d1-3f8): FAIL"
@@ -216,7 +216,7 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
 
 Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open: 4/5.
 
-- [ ] **T3.1** EXP-TREND-E001 expert: mean sign(P/MA_k − 1) — [#16](https://github.com/ddawnlll/tycho/issues/16)
+- [x] **T3.1** EXP-TREND-E001 expert: mean sign(P/MA_k − 1) — [#16](https://github.com/ddawnlll/tycho/issues/16)
   - **Goal:** The only active Expert of E-001: a pure function from a MarketState snapshot + FactorFrame to ExpertSignal[] (score, direction, ABSTAIN). Never an order, never a weight.
   - **Read in the monograph:**
     - §08A.3 `#expert` → "Her Expert kendi MarketStateRequest'ini bildirir" (the JSON is E-001's binding input contract)
@@ -243,7 +243,7 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
   - **PENDING / BLOCKED:** max_staleness (config execution.max_staleness), ewma_convention (only passed through to factors) → required args, no defaults.
   - **Out of scope:** Sizing/weights (T3.2); any return, PnL or Sharpe; other experts (EXP-MOM/CARRY are DEFERRED/BLOCKED); parameter search.
   - **Depends on:** T2.1 [#12](https://github.com/ddawnlll/tycho/issues/12), T2.2 [#13](https://github.com/ddawnlll/tycho/issues/13), T2.3 [#14](https://github.com/ddawnlll/tycho/issues/14)
-- [ ] **T3.2** C-04/C-05 portfolio: w = score·b/σ_EWMA, 2× vol cap, 2.0 gross cap — [#17](https://github.com/ddawnlll/tycho/issues/17)
+- [x] **T3.2** C-04/C-05 portfolio: w = score·b/σ_EWMA, 2× vol cap, 2.0 gross cap — [#17](https://github.com/ddawnlll/tycho/issues/17)
   - **Goal:** Turn ExpertSignal[] into one net target weight per symbol with the pre-registered risk caps, and report every clip.
   - **Read in the monograph:**
     - §03 `#piyasa` → "Kaldıracın gerçek anlamı" (portfolio vol = gross × σ × √(ρ+(1−ρ)/N))
@@ -272,7 +272,7 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
     - ABSTAIN → weight: the monograph forbids extending the previous signal but does not say flat vs hold. Make `on_abstain` a required argument with no default and open a BLOCKED issue if a real run needs it.
   - **Out of scope:** Account stress rule, per-asset cap (no number in the monograph), drawdown alerts, Kelly (P-04 unused), M/C sleeves, execution/band logic (T4.1).
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16)
-- [ ] **T3.3** Core rule: full history vs trailing window → identical last-row weights — [#18](https://github.com/ddawnlll/tycho/issues/18)
+- [x] **T3.3** Core rule: full history vs trailing window → identical last-row weights — [#18](https://github.com/ddawnlll/tycho/issues/18)
   - **Goal:** Prove the §08 core rule: the same pure C-02…C-05 code applied to full history and to a trailing window gives the same last-row weights, so strategy code is never written twice.
   - **Read in the monograph:**
     - §08 `#mimari` → "Çekirdek kuralı: tüm geçmişe uygula, son satırı al" and "İki koşul (v1.1)"
@@ -317,7 +317,7 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
 
 Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, trial log. Open: 6/7.
 
-- [ ] **T4.0** Golden hand-calculated ledger cases (written blind) — [#21](https://github.com/ddawnlll/tycho/issues/21)
+- [x] **T4.0** Golden hand-calculated ledger cases (written blind) — [#21](https://github.com/ddawnlll/tycho/issues/21)
   - **Goal:** Small hand-computed cases that the sequential ledger must reproduce. Written from the interface spec only, by a worker that has not read and must not read src/tycho ledger code. tests/golden/ is write-once.
   - **Read in the monograph:**
     - §07 `#matematik` → "Nakit–pozisyon–fonlama muhasebesi: normatif sözleşme" (equity, notional, weight, funding, fees formulas; double-count rule)
@@ -347,7 +347,7 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
   - **PENDING / BLOCKED:** All PENDING values are case inputs, never library defaults.
   - **Out of scope:** Reading src/tycho ledger/scanner code; editing a golden file after it is written (guard: write-once).
   - **Depends on:** T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17)
-- [ ] **T4.1** Authoritative sequential ledger (D-22) — [#22](https://github.com/ddawnlll/tycho/issues/22)
+- [x] **T4.1** Authoritative sequential ledger (D-22) — [#22](https://github.com/ddawnlll/tycho/issues/22)
   - **Goal:** The single source of truth for net results: an event-ordered account ledger (fills, fees, funding, mark, delist) that the vector scanner is only an approximation of.
   - **Read in the monograph:**
     - §07 `#matematik` → "Nakit–pozisyon–fonlama muhasebesi: normatif sözleşme" (all formulas + "İşaret ve çifte sayım")
@@ -375,7 +375,7 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
   - **PENDING / BLOCKED:** research_notional_usd, absolute_band_nav, partial_trading_ratio, executable_latency, zero-crossing rule (monograph: "ayrı kural", undefined) → required args; add `zero_crossing_rule = "PENDING"` to config [execution].
   - **Out of scope:** Margin/liquidation/ADL simulation, stops (E-002), maker orders (deferred), editing golden cases.
   - **Depends on:** T4.0 [#21](https://github.com/ddawnlll/tycho/issues/21)
-- [ ] **T4.2** CPU numpy scanner with drifted weights — [#23](https://github.com/ddawnlll/tycho/issues/23)
+- [x] **T4.2** CPU numpy scanner with drifted weights — [#23](https://github.com/ddawnlll/tycho/issues/23)
   - **Goal:** Vectorised research formula over variants (v), time (t), assets (a) in float64 — a verifiable formula, not an engine (~200–300 lines).
   - **Read in the monograph:**
     - §10 `#altyapi` → "Tarama formülü (CPU'da numpy, gerekirse GPU)" (formula + why w̃ not w[t−1])
@@ -398,7 +398,7 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
   - **PENDING / BLOCKED:** research_notional_usd (needed for √(order/volume) slippage) → required arg.
   - **Out of scope:** GPU/JAX (only after a measured CPU bottleneck, D-04); ledger parity (M6).
   - **Depends on:** T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17)
-- [ ] **T4.3** E-001 DEV runner (one command) + append-only hash-chained trial log — [#24](https://github.com/ddawnlll/tycho/issues/24)
+- [x] **T4.3** E-001 DEV runner (one command) + append-only hash-chained trial log — [#24](https://github.com/ddawnlll/tycho/issues/24)
   - **Goal:** One deterministic command runs the whole E-001 pipeline on the synthetic tape and appends every run (losers included, K-03) to ledger/trials.jsonl.
   - **Read in the monograph:**
     - §15 `#yol` → F3 row ("Tek komutla deterministik DEV run")

@@ -70,3 +70,12 @@
 - Note: the project deny rule on golden edits also blocked the Write tool; the T4.0 worker installed the files once via a script asserting non-existence. The guard over-blocks read-only shell commands that mention the golden dir.
 - Scanner caveat: w~ divides by (1+gross); gross == -1 gives non-finite values (the monograph formula itself).
 - M5 started (wf_cba2f011-ece).
+
+### Reconciliation with the issue-based PLAN.md (commit 0df30bf, not made by this coordinator)
+- Adopted as the current plan. Checked off by acceptance evidence: T0.5, T3.1–T3.3, T4.0–T4.3 (suite 168 passed on main f766ede). Also done but missing from the new plan: T1.3 (G0 audit fixes), T2.4 (M2 fixes).
+- Verifier items: V0, V1, V2 and V3 FAILed earlier; their fix tasks are T0.5, T1.3, T2.4/T2.5 and T3.4 (queued). V4 running (M4 verifier).
+- T4.4: constant-notional diagnostic already in T4.3 (separate trial); turnover reported. 1h-delay diagnostic: BLOCKED, since the synthetic tape and E-001 data are daily only (needs an intraday tape; real data cancelled).
+- M5 numbering differs from the running M5 workflow: there T5.3 = gates (incl. BTC regime mask) and T5.4 = power; mapped to plan T5.4 / T5.5. Plan T5.3 (subperiods module + per-MA component re-runs logged as trials) is added after.
+### M3 verifier (wf_4bf0a3cb-a4f): FAIL → T3.4 (after T2.5, shared factors.py)
+- Blocker: vectorized.trend_panels builds from the end-of-tape view → later revisions leak into earlier rows (PIT violation).
+- Majors: cov evaluated one bar before the decision time (equality unverified when caps bind); NaN latest close silently falls back to the previous close; ABSTAIN → weight not a required arg (`on_abstain`); MA NaN handling differs between panel and snapshot.
