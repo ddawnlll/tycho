@@ -11,8 +11,8 @@ Markers: `[x]` acceptance test passes · `[ ]` open · `[BLOCKED]` reason given 
 - [OWNER] OS-level lock of the guard, golden and prereg (chattr +i / separate user / branch protection); the hook is a heuristic guard only
 
 ## M1 — G0 FEASIBILITY-DATA (F1)
-- [ ] T1.1 Tape schema (event_time, received_at, received_at_is_observed, available_at, source, revision, quality, instrument_id, instrument_spec_version), PIT loader with DEV clamp (refuses while dev_end_date PENDING; never touches data/holdout), deterministic synthetic tape generator (listings/delistings, 8h funding, mark, specs incl. 1000x multiplier, stablecoin/index symbols) — `tests/test_tape.py`
-- [ ] T1.2 G0 audit `tycho.feasibility`: PIT listings incl. delisted, availability provenance, funding/mark coverage, contract filters + min history, monthly top-30 coverage; no returns or Sharpe; verdict PASS/BLOCKED/INCOMPLETE (BLOCKED while thresholds PENDING) — `tests/test_feasibility.py`
+- [x] T1.1 Tape schema (event_time, received_at, received_at_is_observed, available_at, source, revision, quality, instrument_id, instrument_spec_version), PIT loader with DEV clamp (refuses while dev_end_date PENDING; never touches data/holdout), deterministic synthetic tape generator (listings/delistings, 8h funding, mark, specs incl. 1000x multiplier, stablecoin/index symbols) — `tests/test_tape.py`
+- [x] T1.2 G0 audit `tycho.feasibility`: PIT listings incl. delisted, availability provenance, funding/mark coverage, contract filters + min history, monthly top-30 coverage; no returns or Sharpe; verdict PASS/BLOCKED/INCOMPLETE (BLOCKED while thresholds PENDING) — `tests/test_feasibility.py`
 - [BLOCKED] G0 run on real Binance data — dev_end_date PENDING [OWNER], G0 sufficiency thresholds PENDING
 
 ## M2 — MarketState / Factor / ExpertSignal (F3)
