@@ -1,0 +1,45 @@
+{
+  "name": "run_ledger_delist_exit",
+  "description": "A held position is delisted: DELIST closes the whole position at the delist mark with 50 bps adverse slippage and a 0.0005 taker fee, exactly as E-001's delist rule (mark + 50 bps).",
+  "derivation": "initial wallet 1000. AAA mult=1. FILL +2 @100 fee_rate=0.0005 slip=0: exec=100; fee=2*1*100*0.0005=0.1; wallet=999.9; entry=100; mark=100; u=0; equity=999.9. DELIST mark_price=110 fee_rate=0.0005 slippage_bps=50: closed as a FILL of -2 at price=110 with 50 bps slippage; sign=-1; exec=110*(1-1*50/1e4)=110*(1-0.005)=110*0.995=109.45. realized=(109.45-100)*2*1*sign(+1)=9.45*2=18.9; wallet=999.9+18.9=1018.8. delist fee=2*1*109.45*0.0005=109.45*0.001=0.10945; wallet=1018.8-0.10945=1018.69055; fees_cum=0.1+0.10945=0.20945. Position 0; mark becomes the delist mark_price 110 but no position remains, so unrealized=0; equity=1018.69055. If slippage were ignored, realized would be 20 and fee 0.11, final wallet 1018.9; expected 1018.69055 pins the 50 bps.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 100.0,
+        "fee_rate": 0.0005,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-05T00:00:00Z",
+        "type": "DELIST",
+        "instrument_id": "AAA",
+        "mark_price": 110.0,
+        "fee_rate": 0.0005,
+        "slippage_bps": 50.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 1018.69055,
+    "equity": 1018.69055,
+    "unrealized": 0.0,
+    "realized_cum": 18.9,
+    "fees_cum": 0.20945,
+    "funding_cum": 0.0,
+    "positions": {}
+  }
+}

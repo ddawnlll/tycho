@@ -1,0 +1,30 @@
+{
+  "name": "rebalance_below_min_notional_no_trade",
+  "description": "A trade that survives band and partial ratio but whose rounded notional is below min_notional is not traded. step_size=0.1 keeps the raw qty at 0.1 contracts, so min_notional (50) is the binding constraint, not rounding. absolute_band_nav=0.0001 and partial_ratio=1.0 are explicit illustrative synthetic values (PENDING).",
+  "derivation": "equity=10000; AAA mult=1 mark=100, no position, step_size=0.1, min_notional=50. w_cur=0; target=0.001 -> d=0.001; threshold=max(0.25*0.001, 0.0001)=max(0.00025, 0.0001)=0.00025; 0.001 >= 0.00025 -> trade partial_ratio*d=0.001. raw qty=0.001*10000/100=0.1; step 0.1 keeps 0.1; notional=0.1*1*100=10 < 50 -> no trade. orders={}.",
+  "function": "rebalance_orders",
+  "inputs": {
+    "target_weights": {
+      "AAA": 0.001
+    },
+    "positions": {},
+    "marks": {
+      "AAA": 100.0
+    },
+    "equity": 10000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 0.1,
+        "min_notional": 50.0
+      }
+    },
+    "band_relative": 0.25,
+    "absolute_band_nav": 0.0001,
+    "partial_ratio": 1.0
+  },
+  "expected": {
+    "orders": {}
+  }
+}

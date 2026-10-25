@@ -1,0 +1,59 @@
+{
+  "name": "run_ledger_cross_zero",
+  "description": "One sell fill crosses a long position through zero: the old long is closed and realized against its entry, then the remainder opens a new short at the execution price. A later mark proves the new short uses the new entry.",
+  "derivation": "initial wallet 1000. AAA mult=1. FILL +2 @100 fee=0: entry=100, mark=100, wallet 1000, equity 1000. FILL -5 @90 fee=0: crosses zero (old qty +2, fill -5). Close leg: realize (exec-entry)*closed_qty*mult*sign(position)=(90-100)*2*1*(+1)=-20; wallet=1000-20=980; realized_cum=-20. Open leg: remainder 5-2=3 contracts short at exec=90 -> position -3, entry=90. mark=90 (fill price); unrealized=-3*1*(90-90)=0; equity=980. MARK mark_price=80: unrealized=-3*1*(80-90)=-3*(-10)=+30; wallet stays 980; equity=980+30=1010. If the entry had wrongly stayed 100, unrealized would be -3*(80-100)=60 and equity 1040; expected 1010 pins the reset entry. Final: wallet 980, unrealized 30, equity 1010, realized -20, fees 0, funding 0, position -3. Per-event equity processing order: [1000, 980, 1010].",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 100.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": -5.0,
+        "price": 90.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-03T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "AAA",
+        "mark_price": 80.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 980.0,
+    "equity": 1010.0,
+    "unrealized": 30.0,
+    "realized_cum": -20.0,
+    "fees_cum": 0.0,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": -3.0
+    },
+    "equity_series": [
+      1000.0,
+      980.0,
+      1010.0
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "rebalance_step_rounding_toward_zero",
+  "description": "Raw quantities are rounded toward zero to a multiple of step_size=3, for both a buy and a sell. absolute_band_nav=0.001 and partial_ratio=1.0 are explicit illustrative synthetic values (PENDING in the monograph); band_relative=0.25 is the registry example.",
+  "derivation": "equity=10000; AAA and BBB mult=1 mark=100, no positions. AAA: target=0.05 -> d=0.05; threshold=max(0.25*0.05, 0.001)=max(0.0125, 0.001)=0.0125; 0.05 >= 0.0125 -> trade partial_ratio*d=1.0*0.05=0.05. raw qty=0.05*10000/100=5.0; step 3 -> round toward zero to floor(5/3)*3=1*3=3 -> +3. BBB: target=-0.05 -> d=-0.05 -> trade -0.05 -> raw qty=-5.0 -> round toward zero: -floor(5/3)*3=-3 -> -3. notionals 300 and 300 >= min_notional 1. orders={'AAA': 3.0, 'BBB': -3.0}. Rounding to nearest would give 6 and -6; toward zero gives 3 and -3.",
+  "function": "rebalance_orders",
+  "inputs": {
+    "target_weights": {
+      "AAA": 0.05,
+      "BBB": -0.05
+    },
+    "positions": {},
+    "marks": {
+      "AAA": 100.0,
+      "BBB": 100.0
+    },
+    "equity": 10000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 3.0,
+        "min_notional": 1.0
+      },
+      "BBB": {
+        "instrument_id": "BBB",
+        "contract_multiplier": 1.0,
+        "step_size": 3.0,
+        "min_notional": 1.0
+      }
+    },
+    "band_relative": 0.25,
+    "absolute_band_nav": 0.001,
+    "partial_ratio": 1.0
+  },
+  "expected": {
+    "orders": {
+      "AAA": 3.0,
+      "BBB": -3.0
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "slippage_min_floor",
+  "description": "A tiny order on a deep book: the square-root term is 0.2 bps, so the 2 bps minimum floor binds. y=1.0 and min_bps=2.0 are the spec defaults, passed explicitly.",
+  "derivation": "order_notional=1e6, daily_vol=0.02, adv_notional=1e12, y=1.0, min_bps=2.0. ratio=1e6/1e12=1e-6; sqrt=1e-3; raw=y*daily_vol*sqrt(ratio)*1e4=1.0*0.02*1e-3*1e4=0.2 bps. slippage=max(2.0, 0.2)=2.0 bps.",
+  "function": "slippage_bps",
+  "inputs": {
+    "order_notional": 1000000.0,
+    "daily_vol": 0.02,
+    "adv_notional": 1000000000000.0,
+    "y": 1.0,
+    "min_bps": 2.0
+  },
+  "expected": {
+    "bps": 2.0
+  }
+}

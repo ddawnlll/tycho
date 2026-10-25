@@ -1,0 +1,39 @@
+{
+  "name": "run_ledger_fill_fee_slippage",
+  "description": "Taker fee plus 10 bps adverse slippage on one buy fill. Slippage raises the entry price above the event price; the fill also sets the mark to the raw event price, so the slippage shows up as negative unrealized at that instant.",
+  "derivation": "initial wallet 1000. FILL qty=+4 price=100 fee_rate=0.0005 slippage_bps=10: sign(qty)=+1; exec=100*(1+1*10/1e4)=100*1.001=100.1. fee=|4|*1*100.1*0.0005=400.4*0.0005=0.2002; wallet=1000-0.2002=999.7998; fees_cum=0.2002; realized_cum=0. entry=100.1. The fill sets mark=its price=100 (spec: a FILL sets the mark to its price if no MARK is later). unrealized=4*1*(100-100.1)=4*(-0.1)=-0.4. equity=999.7998+(-0.4)=999.3998. Final: wallet 999.7998, unrealized -0.4, equity 999.3998, realized 0, fees 0.2002, funding 0, position +4.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 4.0,
+        "price": 100.0,
+        "fee_rate": 0.0005,
+        "slippage_bps": 10.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 999.7998,
+    "equity": 999.3998,
+    "unrealized": -0.4,
+    "realized_cum": 0.0,
+    "fees_cum": 0.2002,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": 4.0
+    }
+  }
+}

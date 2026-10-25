@@ -1,0 +1,49 @@
+{
+  "name": "run_ledger_open_long_mark_move",
+  "description": "Open a long with a zero-cost fill, then move the mark up. Unrealized PnL and equity must follow the mark; wallet is untouched by a MARK.",
+  "derivation": "initial wallet 1000. Event 1 FILL qty=+2 price=100 fee_rate=0 slip=0: exec=100*(1+1*0/1e4)=100; fee=|2|*1*100*0=0; wallet=1000-0=1000; entry=100; mark is set to the fill price 100; unrealized=2*1*(100-100)=0; equity=1000+0=1000. Event 2 MARK mark_price=110: no cash, wallet stays 1000; unrealized=2*1*(110-100)=2*10=20; equity=1000+20=1020. Final: wallet 1000, unrealized 20, equity 1020, realized 0, fees 0, funding 0, position +2.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 100.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "AAA",
+        "mark_price": 110.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 1000.0,
+    "equity": 1020.0,
+    "unrealized": 20.0,
+    "realized_cum": 0.0,
+    "fees_cum": 0.0,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": 2.0
+    },
+    "equity_series": [
+      1000.0,
+      1020.0
+    ]
+  }
+}

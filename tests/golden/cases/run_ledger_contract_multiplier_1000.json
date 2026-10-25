@@ -1,0 +1,52 @@
+{
+  "name": "run_ledger_contract_multiplier_1000",
+  "description": "A 1000x contract-multiplier instrument (1000SHIB style): fee, funding and unrealized all use qty*mult*price, so a unit price move is multiplied by 1000.",
+  "derivation": "initial wallet 1000. SHIB1000 mult=1000, step 1. FILL +3 @0.02 fee_rate=0.0005 slip=0: exec=0.02; notional=3*1000*0.02=60; fee=60*0.0005=0.03; wallet=999.97; entry=0.02; mark=0.02; u=3*1000*(0.02-0.02)=0; equity=999.97. MARK 0.021: u=3*1000*(0.021-0.02)=3000*0.001=3.0; wallet stays 999.97; equity=1002.97. FUNDING rate=0.0002 mark_price=0.021: signed notional=3*1000*0.021=63; cashflow=-63*0.0002=-0.0126; wallet=999.97-0.0126=999.9574; funding_cum=-0.0126; mark stays 0.021; u=3.0; equity=1002.9574. Final: wallet 999.9574, unrealized 3.0, equity 1002.9574, realized 0, fees 0.03, funding -0.0126, position +3. Without the multiplier fee would be 0.00003 and unrealized 0.003, so the numbers pin the multiplier.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "SHIB1000": {
+        "instrument_id": "SHIB1000",
+        "contract_multiplier": 1000.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "SHIB1000",
+        "qty": 3.0,
+        "price": 0.02,
+        "fee_rate": 0.0005,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "SHIB1000",
+        "mark_price": 0.021
+      },
+      {
+        "time": "2024-01-03T00:00:00Z",
+        "type": "FUNDING",
+        "instrument_id": "SHIB1000",
+        "rate": 0.0002,
+        "mark_price": 0.021
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 999.9574,
+    "equity": 1002.9574,
+    "unrealized": 3.0,
+    "realized_cum": 0.0,
+    "fees_cum": 0.03,
+    "funding_cum": -0.0126,
+    "positions": {
+      "SHIB1000": 3.0
+    }
+  }
+}

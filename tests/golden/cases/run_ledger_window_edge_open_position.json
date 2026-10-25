@@ -1,0 +1,56 @@
+{
+  "name": "run_ledger_window_edge_open_position",
+  "description": "A position stays open across the end of the replay window: the final snapshot marks it at the last MARK, nothing is force-closed and no exit fee is invented.",
+  "derivation": "initial wallet 1000. AAA mult=1. FILL +1 @50 fee_rate=0.0005 slip=5: sign=+1; exec=50*(1+5/1e4)=50*1.0005=50.025; fee=1*1*50.025*0.0005=0.0250125; wallet=999.9749875; entry=50.025; mark=fill price 50; u=1*(50-50.025)=-0.025; equity=999.9499875. MARK 60: u=60-50.025=9.975; equity=999.9749875+9.975=1009.9499875. MARK 55 (last event, end of window): u=55-50.025=4.975; equity=999.9749875+4.975=1004.9499875. Position is still +1 at the end: no closing fill, so fees_cum stays 0.0250125 and wallet 999.9749875. Final: wallet 999.9749875, unrealized 4.975, equity 1004.9499875, realized 0, fees 0.0250125, funding 0, position +1. A forced close at 55 would add realized 4.975 to wallet and a fee, giving a different wallet; expected wallet pins no forced close.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 1.0,
+        "price": 50.0,
+        "fee_rate": 0.0005,
+        "slippage_bps": 5.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "AAA",
+        "mark_price": 60.0
+      },
+      {
+        "time": "2024-01-03T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "AAA",
+        "mark_price": 55.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 999.9749875,
+    "equity": 1004.9499875,
+    "unrealized": 4.975,
+    "realized_cum": 0.0,
+    "fees_cum": 0.0250125,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": 1.0
+    },
+    "equity_series": [
+      999.9499875,
+      1009.9499875,
+      1004.9499875
+    ]
+  }
+}

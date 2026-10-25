@@ -1,0 +1,34 @@
+{
+  "name": "rebalance_sign_crossing_full",
+  "description": "Target flips sign against the held long: trade the full d, ignoring both the band and partial_ratio. The values are chosen so both bypasses are observable: the band would block |d|, and partial_ratio would round the trade to zero. absolute_band_nav=0.02 and partial_ratio=0.5 are explicit illustrative synthetic values (PENDING in the monograph); band_relative=0.25 is the registry example.",
+  "derivation": "equity=10000; AAA mult=1 mark=100, position 0.25 -> w_cur=0.25*1*100/10000=0.0025; target=-0.001. sign(target)=-1, sign(w_cur)=+1, both nonzero -> sign crossing -> trade full d=target-w_cur=-0.001-0.0025=-0.0035. Band: threshold=max(0.25*0.001, 0.02)=max(0.00025, 0.02)=0.02; abs(d)=0.0035 < 0.02, so the band alone would suppress the trade. Partial ratio alone would trade 0.5*(-0.0035)=-0.00175 -> qty=-0.00175*10000/100=-0.175 -> step 0.25 rounds toward zero to 0 (no trade). Full d: qty=-0.0035*10000/(1*100)=-0.35; step 0.25 -> floor(0.35/0.25)=1 -> -1*0.25=-0.25; notional=0.25*1*100=25 >= min_notional 1. orders={'AAA': -0.25}.",
+  "function": "rebalance_orders",
+  "inputs": {
+    "target_weights": {
+      "AAA": -0.001
+    },
+    "positions": {
+      "AAA": 0.25
+    },
+    "marks": {
+      "AAA": 100.0
+    },
+    "equity": 10000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 0.25,
+        "min_notional": 1.0
+      }
+    },
+    "band_relative": 0.25,
+    "absolute_band_nav": 0.02,
+    "partial_ratio": 0.5
+  },
+  "expected": {
+    "orders": {
+      "AAA": -0.25
+    }
+  }
+}

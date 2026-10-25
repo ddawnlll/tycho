@@ -1,0 +1,66 @@
+{
+  "name": "run_ledger_mark_vs_last",
+  "description": "Unrealized PnL follows the latest MARK, not the last trade price: a fill at 108 resets the mark to 108, and a later MARK at 102 overrides it again.",
+  "derivation": "initial wallet 1000. AAA mult=1. FILL +2 @100 fee=0: entry=100, mark=100, wallet=1000, u=0, equity=1000. MARK 105: u=2*1*(105-100)=10; equity=1010. FILL -1 @108 fee=0: reducing; realized=(108-100)*1*1*(+1)=8; wallet=1008; entry stays 100; position=1; mark reset to the fill price 108; u=1*1*(108-100)=8; equity=1008+8=1016. MARK 102: u=1*1*(102-100)=2; wallet stays 1008; equity=1010. Final: wallet 1008, unrealized 2, equity 1010, realized 8, fees 0, funding 0, position +1. If uPnL used the last fill price (108) it would stay 8 and equity 1016; expected 2/1010 pins mark-vs-last.",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 100.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "AAA",
+        "mark_price": 105.0
+      },
+      {
+        "time": "2024-01-03T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": -1.0,
+        "price": 108.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-04T00:00:00Z",
+        "type": "MARK",
+        "instrument_id": "AAA",
+        "mark_price": 102.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 1008.0,
+    "equity": 1010.0,
+    "unrealized": 2.0,
+    "realized_cum": 8.0,
+    "fees_cum": 0.0,
+    "funding_cum": 0.0,
+    "positions": {
+      "AAA": 1.0
+    },
+    "equity_series": [
+      1000.0,
+      1010.0,
+      1016.0,
+      1010.0
+    ]
+  }
+}

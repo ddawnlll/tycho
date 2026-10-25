@@ -1,0 +1,58 @@
+{
+  "name": "run_ledger_funding_at_close_instant",
+  "description": "A position closed at exactly the funding instant still pays funding: equal timestamps process MARK < FUNDING < DELIST < FILL. The closing FILL is deliberately listed before the FUNDING in the input to exercise the priority rule; input order only breaks ties within one type.",
+  "derivation": "initial wallet 1000. Event 1 FILL +2 @100 fee=0 slip=0: entry 100, mark 100, wallet 1000, equity 1000. At t1 both a FILL (-2) and a FUNDING arrive; FUNDING has priority over FILL. FUNDING rate=0.001 mark_price=100 on position +2: cashflow=-2*1*100*0.001=-0.2; wallet=1000-0.2=999.8; funding_cum=-0.2; position still +2, mark 100, unrealized=0, equity=999.8. Closing FILL qty=-2 price=100 fee_rate=0.001 slip=0: sign=-1; exec=100*(1-1*0/1e4)=100; realized=(100-100)*2*1*(+1)=0; fee=2*1*100*0.001=0.2; wallet=999.8-0.2=999.6; fees_cum=0.2; position 0; mark=100; unrealized=0; equity=999.6. If the fill had been processed before funding, funding would be 0 and the final wallet would be 999.8; the expected 999.6 pins the ordering. Final: wallet 999.6, unrealized 0, equity 999.6, realized 0, fees 0.2, funding -0.2, position flat. Per-event equity in processing order: [1000, 999.8, 999.6].",
+  "function": "run_ledger",
+  "inputs": {
+    "initial_wallet": 1000.0,
+    "instruments": {
+      "AAA": {
+        "instrument_id": "AAA",
+        "contract_multiplier": 1.0,
+        "step_size": 1.0,
+        "min_notional": 1.0
+      }
+    },
+    "events": [
+      {
+        "time": "2024-01-01T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": 2.0,
+        "price": 100.0,
+        "fee_rate": 0.0,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "FILL",
+        "instrument_id": "AAA",
+        "qty": -2.0,
+        "price": 100.0,
+        "fee_rate": 0.001,
+        "slippage_bps": 0.0
+      },
+      {
+        "time": "2024-01-02T00:00:00Z",
+        "type": "FUNDING",
+        "instrument_id": "AAA",
+        "rate": 0.001,
+        "mark_price": 100.0
+      }
+    ]
+  },
+  "expected": {
+    "wallet": 999.6,
+    "equity": 999.6,
+    "unrealized": 0.0,
+    "realized_cum": 0.0,
+    "fees_cum": 0.2,
+    "funding_cum": -0.2,
+    "positions": {},
+    "equity_series": [
+      1000.0,
+      999.8,
+      999.6
+    ]
+  }
+}
