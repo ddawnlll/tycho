@@ -7,3 +7,4 @@ data/
 secrets/
 .env
 *.key
+.claude/worktrees/
