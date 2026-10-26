@@ -105,10 +105,10 @@ def run_ledger(initial_wallet, instruments, events, *, synthetic):
 def rebalance_orders(target_weights, positions, marks, equity, instruments,
                      band_relative, absolute_band_nav, partial_ratio, *,
                      zero_crossing_rule, synthetic):
-    """Explicit synthetic full-crossing policy, NOT an owner-approved rule (#45)."""
+    """D-39 full crossing, explicit and still required for synthetic runs."""
     _synthetic_only(synthetic)
-    if zero_crossing_rule != "full_trade":
-        raise ValueError("choose synthetic zero_crossing_rule='full_trade'; owner policy is PENDING")
+    if zero_crossing_rule != "full_trade_on_zero_or_cross":
+        raise ValueError("zero_crossing_rule must be 'full_trade_on_zero_or_cross' (D-39)")
     _number(equity, positive=True)
     _number(band_relative, nonnegative=True)
     _number(absolute_band_nav, nonnegative=True)

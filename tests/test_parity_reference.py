@@ -20,6 +20,7 @@ from tycho import scanner
 
 ROOT = Path(__file__).resolve().parents[1]
 TOLERANCES = tomllib.loads((ROOT / "config/parity.toml").read_text())
+SCANNER_BOUND = tomllib.loads((ROOT / "config/scanner_bound.toml").read_text())["max_relative_equity_diff"]
 CASES = sorted((ROOT / "tests" / "golden" / "cases").glob("*.json"))
 METRICS = ("wallet", "equity", "unrealized", "realized_cum", "fees_cum", "funding_cum")
 
@@ -37,6 +38,22 @@ def daily_pnl(snapshots, initial, days):
         result.append(equity - previous)
         previous = equity
     return np.asarray(result, dtype=np.float64)
+
+
+def daily_equity(snapshots, initial, days):
+    closing = {snapshot["time"][:10]: snapshot["equity"] for snapshot in snapshots}
+    previous = initial
+    result = []
+    for day in days:
+        previous = closing.get(day, previous)
+        result.append(previous)
+    return np.asarray(result, dtype=np.float64)
+
+
+def max_relative_equity_diff(scanner_equity, ledger_equity):
+    assert scanner_equity.shape == ledger_equity.shape, "equity calendar mismatch"
+    assert np.isfinite(scanner_equity).all() and np.isfinite(ledger_equity).all(), "nonfinite equity"
+    return float(np.max(np.abs(scanner_equity - ledger_equity) / ledger_equity, initial=0))
 
 
 def assert_parity(actual, expected):
@@ -67,7 +84,7 @@ def test_reference_matches_protected_goldens(path):
     if case["function"] == "slippage_bps":
         assert reference.slippage_bps(**inputs) == pytest.approx(expected["bps"], abs=1e-9, rel=0)
     elif case["function"] == "rebalance_orders":
-        orders = reference.rebalance_orders(**inputs, zero_crossing_rule="full_trade", synthetic=True)
+        orders = reference.rebalance_orders(**inputs, zero_crossing_rule="full_trade_on_zero_or_cross", synthetic=True)
         assert nonzero(orders) == expected["orders"]
     else:
         snapshots = reference.run_ledger(**inputs, synthetic=True)
@@ -172,10 +189,12 @@ def test_policy_is_required_and_real_runs_refuse():
     args = ({"AAA": -0.01}, {"AAA": 1.0}, {"AAA": 100.0}, 500.0, instruments, 0.25, 0.01, 0.5)
     with pytest.raises(TypeError):
         reference.rebalance_orders(*args, synthetic=True)
-    with pytest.raises(ValueError, match="PENDING"):
+    with pytest.raises(ValueError, match="D-39"):
         reference.rebalance_orders(*args, zero_crossing_rule="PENDING", synthetic=True)
+    with pytest.raises(ValueError, match="D-39"):
+        reference.rebalance_orders(*args, zero_crossing_rule="full_trade", synthetic=True)
     with pytest.raises(ValueError, match="synthetic-only"):
-        reference.rebalance_orders(*args, zero_crossing_rule="full_trade", synthetic=False)
+        reference.rebalance_orders(*args, zero_crossing_rule="full_trade_on_zero_or_cross", synthetic=False)
     with pytest.raises(ValueError, match="synthetic-only"):
         reference.run_ledger(500, instruments, [], synthetic=False)
 
@@ -242,6 +261,52 @@ def scanner_daily(capital, weights, returns, costs, funding):
     return np.diff(np.concatenate(([capital], equity)))
 
 
+def cost_scanner_tape(capital, variant, fee_rate=0.0005, slippage_bps=2.0, delist_slippage_bps=50.0):
+    """Same imposed-fill diagnostic with real per-fill costs and a delist.
+
+    Each cost input equals fee_rate + slippage on the notional traded that day.
+    Funding is paid at the preceding mark. Designed before the D-41 bound commit.
+    """
+    weights = np.array([
+        [.2, -.1], [.1, -.15], [-.1, .2], [.05, 0], [0, 0], [0, 0],
+    ], dtype=np.float64) * variant
+    returns = np.array([
+        [0, 0], [.03, -.02], [-.02, .04], [.01, -.01], [.04, .2], [-.02, .3],
+    ], dtype=np.float64)
+    funding = np.array([
+        [0, 0], [.001, -.0002], [-.0001, .0003], [.0002, .0001], [0, 0], [0, 0],
+    ], dtype=np.float64)
+    specs, _ = synthetic_tape(capital)
+    prices = np.array([100.0, .05])
+    multipliers = np.array([1.0, 1000.0])
+    costs = np.zeros_like(returns)
+    positions, previous = np.zeros(2), np.zeros(2)
+    nav, events = capital, []
+    for t, target in enumerate(weights):
+        day = f"2024-02-{t + 1:02}"
+        for a, symbol in enumerate(specs):
+            events.append(dict(time=day + "T00:00:00Z", type="FUNDING",
+                               instrument_id=symbol, mark_price=prices[a], rate=funding[t, a]))
+        nav *= 1 + previous @ (returns[t] - funding[t])
+        prices *= 1 + returns[t]
+        wanted = target * nav / (prices * multipliers)
+        for a, symbol in enumerate(specs):
+            events.append(dict(time=day + "T12:00:00Z", type="MARK",
+                               instrument_id=symbol, mark_price=prices[a]))
+            if t == 3 and symbol == "BBB":
+                costs[t, a] = fee_rate + delist_slippage_bps / 1e4
+                events.append(dict(time=day + "T12:00:01Z", type="DELIST",
+                                   instrument_id=symbol, mark_price=prices[a],
+                                   fee_rate=fee_rate, slippage_bps=delist_slippage_bps))
+            elif wanted[a] != positions[a]:
+                costs[t, a] = fee_rate + slippage_bps / 1e4
+                events.append(dict(time=day + "T12:00:01Z", type="FILL",
+                                   instrument_id=symbol, qty=wanted[a] - positions[a], price=prices[a],
+                                   fee_rate=fee_rate, slippage_bps=slippage_bps))
+        positions, previous = wanted, target
+    return specs, events, weights[None, :, :], returns, costs, funding
+
+
 @pytest.mark.parametrize("capital", [500.0, 100000.0])
 @pytest.mark.parametrize("variant", [.5, 1.0, 1.5])
 def test_three_way_exact_diagnostic_parity(capital, variant):
@@ -277,23 +342,50 @@ def test_scanner_seeds_cannot_pass_three_way_parity(fault):
 
 
 @pytest.mark.parametrize("capital", [500.0, 100000.0])
-def test_cost_bearing_exact_parity_is_blocked_not_silently_approximated(capital):
-    """Counterexample: fee changes equity, so target weight != filled weight.
+@pytest.mark.parametrize("variant", [.5, 1.0, 1.5])
+def test_cost_bearing_scanner_within_d41_bound(capital, variant):
+    """D-41: scanner is approximate with costs; check the preregistered bound.
 
-    No tolerance tuning or cost fitting: both legs have the same 5bps fee.
-    The scanner's second fee is smaller by capital * (.2 * .0005)**2.
+    Reference <-> sequential stays exact under config/parity.toml.
+    """
+    specs, events, weights, returns, costs, funding = cost_scanner_tape(capital, variant)
+    days = [f"2024-02-{day:02}" for day in range(1, 7)]
+    ref_rows = run(reference, capital, specs, events)
+    seq_rows = run(ledger, capital, specs, events)
+    ref, seq = daily_equity(ref_rows, capital, days), daily_equity(seq_rows, capital, days)
+    assert_parity(daily_pnl(seq_rows, capital, days), daily_pnl(ref_rows, capital, days))
+    result = scanner.scan(weights, returns, costs, funding)
+    scan = capital * result["equity"][0]
+    assert np.max(np.abs(scan - seq)) / np.max(seq) > 0, "fixture must actually bear costs"
+    assert max_relative_equity_diff(scan, seq) <= SCANNER_BOUND
+    assert max_relative_equity_diff(scan, ref) <= SCANNER_BOUND
+
+
+@pytest.mark.parametrize("capital", [500.0, 100000.0])
+def test_cost_bearing_counterexample_is_expected_approximation(capital):
+    """D-41 expected approximation, not a failure.
+
+    Flat prices, target .2 then flat, 5bps each leg. Ledger stays at .2 capital;
+    scanner compounds the first fee into equity but exits the prior .2 target.
+    Analytical relative gap is (0.2 * 0.0005)**2, far below the D-41 bound.
     """
     specs, _ = synthetic_tape(capital)
     events = [dict(time=f"2024-03-0{day}T12:00:01Z", type="FILL", instrument_id="AAA",
                    qty=qty * capital / 500, price=100.0, fee_rate=.0005, slippage_bps=0.0)
               for day, qty in [(1, 1.0), (2, -1.0)]]
     days = ["2024-03-01", "2024-03-02"]
-    ref = daily_pnl(run(reference, capital, specs, events), capital, days)
-    seq = daily_pnl(run(ledger, capital, specs, events), capital, days)
+    ref_rows = run(reference, capital, specs, events)
+    seq_rows = run(ledger, capital, specs, events)
+    ref = daily_pnl(ref_rows, capital, days)
+    seq = daily_pnl(seq_rows, capital, days)
+    assert_parity(seq, ref)
     weights = np.array([[[.2], [0]]], dtype=np.float64)
     zeros = np.zeros((2, 1), dtype=np.float64)
-    scan = scanner_daily(capital, weights, zeros, zeros + .0005, zeros)
-    assert_parity(seq, ref)
-    assert scan.sum() - ref.sum() == pytest.approx(capital * (.2 * .0005)**2, abs=1e-10, rel=0)
-    with pytest.raises(AssertionError, match="PnL mismatch"):
-        assert_parity(scan, ref)
+    result = scanner.scan(weights, zeros, zeros + .0005, zeros)
+    scan = capital * result["equity"][0]
+    seq_equity = daily_equity(seq_rows, capital, days)
+    # Exact parity is intentionally not required with costs; this gap is expected.
+    assert np.max(np.abs(np.diff(np.concatenate(([capital], scan))) - seq)) > TOLERANCES["daily_pnl_abs_diff"]
+    gap = max_relative_equity_diff(scan, seq_equity)
+    assert gap <= SCANNER_BOUND
+    assert gap == pytest.approx((.2 * .0005)**2, rel=0.01, abs=0)
