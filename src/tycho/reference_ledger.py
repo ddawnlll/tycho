@@ -3,6 +3,10 @@
 Equity is signed inventory marked to market plus a trade-cash account; average
 cost is tracked separately to split equity into wallet and unrealized PnL.
 Neither production accounting module is imported here.
+
+D-41 provenance: a cost-bearing scanner diagnostic existed at 8d9db4b before
+D-41; the owner then fixed the 1e-4 relative bound, and config/scanner_bound.toml
+was committed in e0a2451 before all post-D-41 cost-bearing comparisons.
 """
 
 from dataclasses import dataclass

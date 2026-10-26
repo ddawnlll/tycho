@@ -2,6 +2,8 @@
 
 Production modules may be called, never inspected. Frozen tolerances are USDT,
 not returns; both daily increments and total PnL must pass without relative slack.
+Cost-bearing scanner checks use the D-41 bound; a pre-decision diagnostic at
+8d9db4b predates D-41 (provenance in config/scanner_bound.toml).
 """
 
 from copy import deepcopy
@@ -265,7 +267,8 @@ def cost_scanner_tape(capital, variant, fee_rate=0.0005, slippage_bps=2.0, delis
     """Same imposed-fill diagnostic with real per-fill costs and a delist.
 
     Each cost input equals fee_rate + slippage on the notional traded that day.
-    Funding is paid at the preceding mark. Designed before the D-41 bound commit.
+    Funding is paid at the preceding mark. D-41 provenance is recorded in
+    config/scanner_bound.toml; this fixture's checks all post-date e0a2451.
     """
     weights = np.array([
         [.2, -.1], [.1, -.15], [-.1, .2], [.05, 0], [0, 0], [0, 0],
@@ -344,9 +347,12 @@ def test_scanner_seeds_cannot_pass_three_way_parity(fault):
 @pytest.mark.parametrize("capital", [500.0, 100000.0])
 @pytest.mark.parametrize("variant", [.5, 1.0, 1.5])
 def test_cost_bearing_scanner_within_d41_bound(capital, variant):
-    """D-41: scanner is approximate with costs; check the preregistered bound.
+    """D-41: scanner is approximate with costs; check the owner-fixed bound.
 
-    Reference <-> sequential stays exact under config/parity.toml.
+    A pre-decision cost-bearing diagnostic ran at 8d9db4b before D-41 existed.
+    D-41 fixed 1e-4; e0a2451 committed it before all post-D-41 cost-bearing
+    comparisons, and it has never changed. Reference <-> sequential stays exact
+    under config/parity.toml.
     """
     specs, events, weights, returns, costs, funding = cost_scanner_tape(capital, variant)
     days = [f"2024-02-{day:02}" for day in range(1, 7)]
@@ -365,8 +371,10 @@ def test_cost_bearing_scanner_within_d41_bound(capital, variant):
 def test_cost_bearing_counterexample_is_expected_approximation(capital):
     """D-41 expected approximation, not a failure.
 
-    Flat prices, target .2 then flat, 5bps each leg. Ledger stays at .2 capital;
-    scanner compounds the first fee into equity but exits the prior .2 target.
+    This is the pre-decision diagnostic measurement (first run at 8d9db4b),
+    retained and now checked against the owner-fixed D-41 bound. Flat prices,
+    target .2 then flat, 5bps each leg. Ledger stays at .2 capital; scanner
+    compounds the first fee into equity but exits the prior .2 target.
     Analytical relative gap is (0.2 * 0.0005)**2, far below the D-41 bound.
     """
     specs, _ = synthetic_tape(capital)
