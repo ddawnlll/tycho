@@ -301,6 +301,50 @@ def test_locked_worktree_is_kept(tmp_path, fake_cache_bin):
     assert "locked" in git(repo, "worktree", "list", "--porcelain").stdout
 
 
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("include_worktrees", [False, True])
+def test_generic_cleanup_cannot_delete_locked_worktrees(tmp_path, fake_cache_bin,
+                                                       nested, include_worktrees):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+    parent = repo / "tmp" / "container" if nested else repo / "tmp"
+    parent.mkdir(exist_ok=True)
+    moved = parent / "locked-wt"
+    git(repo, "worktree", "move", str(unmerged), str(moved))
+    git(repo, "worktree", "lock", "--reason", "active worker", str(moved))
+    (moved / "scratch.txt").write_bytes(b"must survive\x00\xff")
+    cache = moved / "__pycache__"
+    cache.mkdir()
+    (cache / "work.pyc").write_bytes(b"locked cache")
+    args = ["--include-worktrees"] if include_worktrees else []
+    assert run_cleanup(repo, *args, pathdir=bindir).returncode == 0
+    result = run_cleanup(repo, "--apply", *args, pathdir=bindir)
+    assert result.returncode == 0, result.stderr
+    assert (moved / "scratch.txt").read_bytes() == b"must survive\x00\xff"
+    assert (cache / "work.pyc").read_bytes() == b"locked cache"
+    assert "locked active worker" in git(repo, "worktree", "list", "--porcelain").stdout
+    if include_worktrees:
+        assert "kept: locked" in result.stdout
+    assert not (repo / "tmp" / "junk.bin").exists()
+
+
+def test_generic_parent_cannot_delete_archive_failed_worktree(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+    parent = repo / "tmp" / "container"
+    parent.mkdir()
+    moved = parent / "nested-wt"
+    git(repo, "worktree", "move", str(unmerged), str(moved))
+    (moved / "scratch.txt").write_bytes(b"unsaved\x00\xff")
+    (repo / "runs" / "archive" / "nested-wt.untracked.tar.gz").mkdir(parents=True)
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    result = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+    assert result.returncode == 1
+    assert "kept: archive failed" in result.stdout
+    assert (moved / "scratch.txt").read_bytes() == b"unsaved\x00\xff"
+    assert str(moved) in git(repo, "worktree", "list", "--porcelain").stdout
+
+
 @pytest.mark.parametrize("failed_command", ["status", "rev-list", "diff", "format-patch", "ls-files"])
 def test_failed_archive_git_read_keeps_worktree(tmp_path, fake_cache_bin, monkeypatch,
                                                failed_command):

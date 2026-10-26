@@ -88,8 +88,18 @@ def protected_text(repo, path):
 
 def scan(repo, include_worktrees):
     found = []
+    linked = [wt for wt in worktrees(repo)
+              if os.path.realpath(wt["path"]) != os.path.realpath(repo)]
+    linked_paths = [Path(os.path.realpath(wt["path"])) for wt in linked]
 
     def add(path, kind, branch=None, locked=False):
+        resolved = Path(os.path.realpath(path))
+        # Generic cleanup must not bypass worktree locks or archival checks.
+        if kind != "worktree" and any(
+            resolved == wt or resolved in wt.parents or wt in resolved.parents
+            for wt in linked_paths
+        ):
+            return
         found.append({"path": path, "kind": kind, "branch": branch, "locked": locked})
 
     for root, dirs, _ in os.walk(repo):
@@ -126,7 +136,7 @@ def scan(repo, include_worktrees):
 
     if include_worktrees:
         # Filter by path, not list position: the main worktree is the one at --repo.
-        for wt in worktrees(repo):
+        for wt in linked:
             if os.path.islink(wt["path"]):
                 continue
             p = os.path.realpath(wt["path"])
