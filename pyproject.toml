@@ -13,6 +13,7 @@ dependencies = [
     "pyarrow",
     "arch",
     "statsmodels",
+    "nautilus_trader==1.221.0",
 ]
 
 [dependency-groups]
