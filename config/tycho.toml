@@ -39,6 +39,7 @@ partial_trading_ratio = "PENDING"
 executable_latency = "PENDING"
 research_nominal_usd = "PENDING"
 max_staleness = "PENDING"
+zero_crossing_rule = "full_trade_on_zero_or_cross"
 
 [stats]
 null_reps = 2000
