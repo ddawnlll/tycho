@@ -37,8 +37,9 @@ def _manifest():
     return make_manifest(
         SOURCE,
         PARAMS,
-        id="EXP-TREND-E001",
+        expert_id="EXP-TREND-E001",
         semantic_version="1.0",
+        snapshot_schema="1",
         owner="research",
         sleeve="T",
         research_status="DRAFT",
@@ -63,7 +64,7 @@ def trivial_factor_fn(snapshot):
 
 def _signal(snapshot, manifest, instrument_id, direction, score, reason=None):
     return ExpertSignal(
-        expert_id=manifest.id,
+        expert_id=manifest.expert_id,
         manifest_hash=manifest.manifest_hash(),
         snapshot_id=snapshot.snapshot_id,
         as_of=snapshot.as_of,
@@ -111,7 +112,7 @@ class DummyExpert:
 
     def request(self, as_of):
         return MarketStateRequest(
-            expert_id=self.manifest.id,
+            expert_id=self.manifest.expert_id,
             request_version="1",
             universe_id=UNIVERSE,
             as_of=pd.Timestamp(as_of),

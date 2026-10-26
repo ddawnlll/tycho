@@ -63,9 +63,9 @@ def _enforce(signals, manifest, snapshot, availability, universe) -> None:
     universe = set(universe)
     seen = set()
     for signal in signals:
-        if signal.expert_id != manifest.id:
+        if signal.expert_id != manifest.expert_id:
             raise ValueError(
-                f"signal expert_id {signal.expert_id!r} != manifest id {manifest.id!r}"
+                f"signal expert_id {signal.expert_id!r} != manifest expert_id {manifest.expert_id!r}"
             )
         if signal.manifest_hash != manifest_hash:
             raise ValueError("signal manifest_hash does not match the manifest")

@@ -254,10 +254,11 @@ def test_snapshot_id_tracks_bars_content(provider):
 
 def _manifest(**overrides):
     fields = dict(
-        id="EXP-TREND-E001",
+        expert_id="EXP-TREND-E001",
         semantic_version="1.0",
         code_hash="code",
         params_hash="params",
+        snapshot_schema="1",
         owner="research",
         sleeve="T",
         research_status="DRAFT",
@@ -280,6 +281,18 @@ def test_manifest_hash_and_status_validation():
     assert manifest.manifest_hash() != _manifest(params_hash="other").manifest_hash()
     with pytest.raises(ValueError, match="research_status"):
         _manifest(research_status="LIVE")
+
+
+def test_manifest_hash_covers_expert_id_and_snapshot_schema():
+    base = _manifest()
+    assert base.manifest_hash() != _manifest(expert_id="EXP-OTHER").manifest_hash()
+    assert base.manifest_hash() != _manifest(snapshot_schema="2").manifest_hash()
+
+
+def test_manifest_has_no_legacy_id_field():
+    assert not hasattr(_manifest(), "id")
+    with pytest.raises(TypeError):
+        _manifest(id="EXP-TREND-E001")
 
 
 def _signal(**overrides):
