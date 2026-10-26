@@ -2,6 +2,7 @@
 
 ## Commands
 - Setup: `uv sync`. Tests: `uv run pytest -q` (~40 s, 175+ tests). Run only the issue's acceptance command while iterating; the full suite once before a PR.
+- Faster local/CI run (validated): `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run pytest -q -n 2` — two xdist workers, each single-threaded; the pinned synthetic-power counts must stay identical.
 - Issues: `gh issue view <n> --repo ddawnlll/tycho`; close with `gh issue close <n> --reason completed --comment "<evidence>"`.
 - At most **4 agent sessions** in parallel (monograph cap, D-27), whatever the machine.
 

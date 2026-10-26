@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest"]
+dev = ["pytest", "pytest-xdist"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
