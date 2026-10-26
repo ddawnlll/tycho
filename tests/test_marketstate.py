@@ -202,6 +202,30 @@ def test_missing_and_stale_flags(provider):
     assert bool(tight.availability.loc["BTCUSDT", "missing"]) is False
 
 
+@pytest.mark.parametrize("absent", [False, True])
+def test_current_daily_close_required_despite_enough_recent_history(provider, tape, absent):
+    date = pd.Timestamp("2019-11-10", tz="UTC")
+    current = (tape.bars_1d["instrument_id"] == "BTCUSDT") & (tape.bars_1d["event_time"] == date)
+    publication = date + pd.Timedelta("1h")
+    if absent:
+        tape.bars_1d = tape.bars_1d.loc[~current].reset_index(drop=True)
+    else:
+        tape.bars_1d.loc[current, ["available_at", "received_at"]] = publication
+    for as_of, missing in (
+        (date, False),  # a same-stamp bar is not closed yet
+        (date + pd.Timedelta("1min"), True),
+        (publication - pd.Timedelta("1ns"), True),
+        (publication, absent),
+        (date + pd.Timedelta("1D1min"), False),
+    ):
+        snapshot = provider.resolve(request(as_of))
+        row = snapshot.availability.loc["BTCUSDT"]
+        assert row["n_bars"] == 60
+        assert not row["stale"]
+        assert bool(row["missing"]) is missing
+        assert (snapshot.bars["event_time"] < as_of).all()
+
+
 def test_repeated_resolve_returns_the_same_object(provider):
     first = provider.resolve(request("2019-11-10"))
     assert provider.resolve(request("2019-11-10")) is first
@@ -230,10 +254,11 @@ def test_snapshot_id_tracks_bars_content(provider):
 
 def _manifest(**overrides):
     fields = dict(
-        id="EXP-TREND-E001",
+        expert_id="EXP-TREND-E001",
         semantic_version="1.0",
         code_hash="code",
         params_hash="params",
+        snapshot_schema="1",
         owner="research",
         sleeve="T",
         research_status="DRAFT",
@@ -256,6 +281,18 @@ def test_manifest_hash_and_status_validation():
     assert manifest.manifest_hash() != _manifest(params_hash="other").manifest_hash()
     with pytest.raises(ValueError, match="research_status"):
         _manifest(research_status="LIVE")
+
+
+def test_manifest_hash_covers_expert_id_and_snapshot_schema():
+    base = _manifest()
+    assert base.manifest_hash() != _manifest(expert_id="EXP-OTHER").manifest_hash()
+    assert base.manifest_hash() != _manifest(snapshot_schema="2").manifest_hash()
+
+
+def test_manifest_has_no_legacy_id_field():
+    assert not hasattr(_manifest(), "id")
+    with pytest.raises(TypeError):
+        _manifest(id="EXP-TREND-E001")
 
 
 def _signal(**overrides):

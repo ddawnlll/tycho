@@ -153,6 +153,11 @@ def _utc(t) -> pd.Timestamp:
     return ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
 
 
+def _daily_close_before(as_of) -> pd.Timestamp:
+    """Latest UTC daily close strictly before the decision (same-stamp is not closed)."""
+    return as_of.ceil("D") - pd.Timedelta(days=1)
+
+
 def _latest(instruments):
     return (
         instruments.sort_values(["event_time", "revision"])
@@ -168,13 +173,14 @@ def _delisted_at(instruments) -> dict:
 
 def _availability(bars, universe, as_of, lookback, max_staleness, delisted_at) -> pd.DataFrame:
     max_staleness = pd.Timedelta(max_staleness)
+    expected_close = _daily_close_before(as_of)
     records = {}
     for iid in universe:
         group = bars[bars["instrument_id"] == iid]
         n_bars = int(len(group))
         last_bar_time = group["event_time"].max() if n_bars else pd.NaT
         last_available_at = group["available_at"].max() if n_bars else pd.NaT
-        missing = n_bars < lookback
+        missing = n_bars < lookback or last_bar_time != expected_close
         stale = bool(pd.isna(last_bar_time)) or (as_of - last_bar_time) > max_staleness
         end = delisted_at.get(iid)
         delisted = bool(not pd.isna(end) and end <= as_of)

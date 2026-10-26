@@ -10,12 +10,16 @@ def risk_budget(target_vol, n, rho) -> float:
     return target_vol / (n * math.sqrt(rho + (1.0 - rho) / n))
 
 
-def target_weights(scores, vols, cov, target_vol, rho, n, vol_cap_multiple, gross_cap):
+def target_weights(scores, vols, cov, target_vol, rho, n, vol_cap_multiple, gross_cap, *, on_abstain):
     """Raw w_i = score_i * b / vol_i, then one proportional shrink for the binding cap.
 
     ``n`` is the configured universe size, not the current number of instruments.
     Returns (weights, diag); diag holds b, raw gross, forecast vol, scale s and cap.
+    ``on_abstain`` must explicitly be "flat"; holding needs caller-owned state
+    and is not implemented by this stateless sizing function.
     """
+    if on_abstain != "flat":
+        raise ValueError("on_abstain must explicitly be 'flat'; holding is not implemented")
     b = risk_budget(target_vol, n, rho)
     vol = vols.reindex(scores.index)
     weights = pd.Series(0.0, index=scores.index)

@@ -1,6 +1,7 @@
 # Tycho — research package (DEV only)
 
 Binding spec: `docs/tycho-monograf-v1.3.2.html`; canonical registry = its `#tycho-registry` JSON. If text and registry conflict, that item is BLOCKED — never pick an interpretation.
+Owner eki docs/owner-decisions-v1.3.3.md, monograf ve registry ile çeliştiği ya da onların sessiz kaldığı yerde önceliklidir.
 
 - Layout: `src/tycho/` package, `tests/`, `config/` (PENDING values stay `"PENDING"`), `runs/` (operational state, gitignored), `ledger/trials.jsonl` (append-only trial log).
 - Env: `uv sync`, tests: `uv run pytest -q`.

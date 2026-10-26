@@ -75,6 +75,25 @@ Markers: `[x]` acceptance test passes · `[ ]` open · `[CANCELLED owner 2026-10
 
 ## 5. Dependency order
 
+### Autonomous DEV completion — 2026-10-25
+
+Starting main: `92d89e3f6f922aa81bbaeed954a3276e169aa481` (T5.2 already merged; #29 closed).
+Wave 1: #43 (slot A), genuinely blind #35 (slot B), #28 (slot C), coordinator verification/reconciliation (slot D).
+Then follow `docs/dispatch-plan.md`: independent verification before closure, exact acceptance and full suite on integrated main, one PR per task, PLAN/PROGRESS updated together after each merge.
+No Modal execution: skill/PLAN prohibit it and the budget is owner-only; small synthetic checks stay local. Undefined scientific rules remain BLOCKED, never guessed.
+Owner decisions discovered: #45 (zero-crossing policy), #46 (null/baseline preservation rules). Public scanner interface supplied in `docs/scanner-interface.md` for blind-worker request #47.
+
+### Owner decisions v1.3.3 — 2026-10-26 (binding annex)
+`docs/owner-decisions-v1.3.3.md` (commit `4b94313`) resolves the five blockers and takes precedence over the monograph/registry where they conflict or are silent:
+- **D-39 (#45):** zero target / sign crossing trades the full difference; band and partial ratio do not apply; closing to flat is allowed below min_notional; config key `execution.zero_crossing_rule = "full_trade_on_zero_or_cross"`.
+- **D-40 (#46):** nulls from the realized target-weight panel through the same sequential ledger; run-scramble and random-entry definitions, preserved/unpreserved lists, equal-risk B&H with score +1, BTC baseline with b = target vol, no-trade baseline; trial `role` field; DSR family membership stays PENDING.
+- **D-41 (#53):** exact three-way parity only for reference ↔ sequential ↔ Nautilus; scanner exact on costless fixtures and relative equity bound `1e-4` on cost-bearing ones, frozen first in new `config/scanner_bound.toml`; scanner never used in E-001 criteria.
+- **D-42 (#52):** manifest field set is the text∪registry union with `expert_id` and required `snapshot_schema`.
+- **D-43 (#51):** the 1h-delay diagnostic is out of the synthetic phase and deferred to the real-data phase; V4 cannot fail because of it.
+
+Additional blockers: #51 (1h execution tape), #52 (manifest text/registry conflict), #53 (cost-bearing exact scanner parity). V0/V1/V4 fixes: #48/#58, #49, #50. #30 implementation is in PR #54 with closed-bar review fix #56; no unchecked item is marked complete.
+Slot B staging: original tolerance-first commit `26f1d9b` is merged unchanged, independently reviewed and full-suite green. Dispatch explicitly allows #38 after this standalone commit; #35 remains open/BLOCKED (#45/#53), and no general scanner parity is claimed. Install Nautilus only in an exclusive test-free window.
+
 ```text
 M0 T0.5 ─► V0
 M1 (done) ─► V1
@@ -132,7 +151,8 @@ Package, config with PENDING kept, guard hook, cleanup script. Open: 2/7.
   M0 verifier found heuristic bypasses. The guard protects itself, so only the owner can change it. Owner cancelled 2026-10-25; known residual risk.
 - [CANCELLED owner 2026-10-25] **X0.b** OS-level lock of guard, golden and prereg (chattr +i / separate user / branch protection) — [#6](https://github.com/ddawnlll/tycho/issues/6) · BLOCKED  
   Monograph wants separate credentials for the protected judge. Owner cancelled 2026-10-25; the hook stays a heuristic guard.
-- [ ] **V0** M0 verifier re-run after T0.5 — [#7](https://github.com/ddawnlll/tycho/issues/7) · verifier
+- [x] **T0.6 / T0.7** Preserve locked/archival-failed worktrees, including generic-directory overlaps — #48 / #58, commits `74fe1ef` / `8c69f50`. Independent Astra PASS (12 adversarial probes); integrated acceptance: 21 passed; full suite: 196 passed.
+- [x] **V0** M0 verifier re-run after T0.5 — [#7](https://github.com/ddawnlll/tycho/issues/7) · verifier
   - **Goal:** First run (wf_4e6413d1-3f8) = FAIL → T0.5. Re-verify cleanup.py after the fixes. Guard bypasses are a known, owner-cancelled residual risk — do not re-report them.
   - **Read in the monograph:**
     - CLAUDE.md protected set
@@ -164,7 +184,8 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
   Acceptance: `uv run pytest -q tests/test_feasibility.py tests/test_tape.py`
 - [CANCELLED owner 2026-10-25] **X1.a** G0 run on real Binance data — [#10](https://github.com/ddawnlll/tycho/issues/10) · BLOCKED  
   Needs dev_end_date [OWNER] and G0 sufficiency thresholds (PENDING). Owner cancelled 2026-10-25.
-- [ ] **V1** M1 verifier (G0 tape + audit) — [#11](https://github.com/ddawnlll/tycho/issues/11) · verifier
+- [x] **T1.4** Reject invalid/non-finite G0 thresholds — #49, `6fb1f20`; independent Astra PASS, integrated acceptance 89 passed, full suite 252 passed.
+- [x] **V1** M1 verifier (G0 tape + audit) — [#11](https://github.com/ddawnlll/tycho/issues/11) · verifier
   - **Goal:** The first M1 verifier run was interrupted by /exit and the re-run result is not recorded. Verify T1.1/T1.2 from a clean context.
   - **Read in the monograph:**
     - §08A.2 tape contract; §14 G0 scope; registry `feasibility.data.prohibited`
@@ -194,6 +215,7 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
 - [x] **T2.3** C-03 expert runtime + manifest hashing, ABSTAIN enforcement — [#14](https://github.com/ddawnlll/tycho/issues/14)  
   Commit 226393d.
   Acceptance: `uv run pytest -q tests/test_expert_runtime.py`
+- [x] **T2.6** — [#52](https://github.com/ddawnlll/tycho/issues/52) D-42 manifest schema: `expert_id` + required `snapshot_schema`, text∪registry union, hash covers all 16 fields. Commit `d06f483`; independent PASS; integrated acceptance 49 passed, full suite 363 passed.
 - [ ] **V2** M2 verifier (MarketState / Factor / Runtime) — [#15](https://github.com/ddawnlll/tycho/issues/15) · verifier
   - **Goal:** No M2 verifier has run. Verify the §08A.8 acceptance table from a clean context before M3 builds on it.
   - **Read in the monograph:**
@@ -297,14 +319,15 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
   - **PENDING / BLOCKED:** Binding live window length → BLOCKED (X3.a). ewma_convention → test fixture value, clearly marked synthetic.
   - **Out of scope:** Choosing a binding window length; editing config.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17)
-- [ ] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43)
+- [x] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43), `d829405`; independent Astra PASS for all five findings, integrated acceptance 39 passed / full suite 271 passed.
+- [x] **T3.5** Delayed-current-bar readiness agrees between panel and snapshot — #61, `dc69dba`; independent Astra PASS, integrated acceptance 78 passed / full suite 285 passed.
   - **Goal:** Close the M3 verifier findings (wf_4bf0a3cb-a4f); the blocker is a point-in-time leak in the vectorized full-history path.
   - **Contract:** (1) blocker: `vectorized.trend_panels` builds from the end-of-tape view, so later revisions leak into earlier rows; (2) cov evaluated one bar before the decision time — add a test where the vol cap binds; (3) NaN latest close must ABSTAIN, not fall back; (4) `on_abstain` required argument, no default; (5) same MA NaN handling in panel and snapshot paths.
   - **Acceptance:** `uv run pytest -q tests/test_window_equality.py tests/test_portfolio.py tests/test_exp_trend.py`
   - **Depends on:** T2.5 [#42](https://github.com/ddawnlll/tycho/issues/42) (shared factors.py)
 - [CANCELLED owner 2026-10-25] **X3.a** Binding live window length: §08 "≥400 bars" vs registry warmup "not universal 400" / lookback 260 — [#19](https://github.com/ddawnlll/tycho/issues/19) · BLOCKED  
   Text/registry conflict → BLOCKED per CLAUDE.md. Owner cancelled the resolution 2026-10-25; T3.3 keeps window length as a test parameter.
-- [ ] **V3** M3 verifier (EXP-TREND-E001 + portfolio) — [#20](https://github.com/ddawnlll/tycho/issues/20) · verifier
+- [x] **V3** M3 verifier (EXP-TREND-E001 + portfolio) — [#20](https://github.com/ddawnlll/tycho/issues/20) · verifier
   - **Goal:** Clean-context verification of the signal and sizing against §08A/§09/§14 before any ledger work uses them.
   - **Read in the monograph:**
     - §08A.3–08A.4, §09 C-02…C-05, §14 Sinyal/Boyutlandırma rows; registry `first_experiment.signal|sizing`
@@ -431,7 +454,8 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
   - **PENDING / BLOCKED:** All E-001 PENDING values → synthetic placeholders only in --synthetic mode, recorded in the trial record.
   - **Out of scope:** Real data; Modal; DuckDB archive.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17), T4.1 [#22](https://github.com/ddawnlll/tycho/issues/22), T4.2 [#23](https://github.com/ddawnlll/tycho/issues/23)
-- [ ] **T4.4** E-001 diagnostics: constant-notional variant, 1h delay, turnover report — [#25](https://github.com/ddawnlll/tycho/issues/25)
+- [x] **T4.4** E-001 diagnostics: constant-notional variant, 1h delay, turnover report — [#25](https://github.com/ddawnlll/tycho/issues/25)  
+  Constant-notional and turnover are separate counted trials flagged `diagnostic: true`; turnover is `Σ|qty·mult·fill_price| / equity_before_trades`, bucketed by execution year, including forced delist exits and excluding warm-start reconstruction. Hand case `0.5 + 2/3`. Two independent review rounds found and fixed #68 (year source) and #69 (scale-dependent step rejection). The 1h-delay fill has no intraday executable tape and remains BLOCKED in #51 by dispatch instruction.
   - **Goal:** Diagnostics the monograph requires next to the main run — counted in the trial log, never pass criteria.
   - **Read in the monograph:**
     - §14 `#e001` → "Boyutlandırma" (Teşhis: sabit nominal), "Karar ve dolum" (1h gecikme robustness)
@@ -522,7 +546,7 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
   - **PENDING / BLOCKED:** dsr_trial_effective_n, dsr_trial_sharpe_variance, bootstrap_block_rule → required args, no defaults.
   - **Out of scope:** Picking N_eff or block length; reading DEV results to set them.
   - **Depends on:** T4.3 [#24](https://github.com/ddawnlll/tycho/issues/24)
-- [ ] **T5.3** Subperiod split (BTC 200d MA as-of) + per-MA component check — [#30](https://github.com/ddawnlll/tycho/issues/30)
+- [x] **T5.3** Subperiod split (BTC 200d MA as-of) + per-MA component check — [#30](https://github.com/ddawnlll/tycho/issues/30), commits `75cc93a`, `e464ede`, `7bdd8a7`; independent coordinator PASS, closed-bar follow-up #56 included. Integrated acceptance 11 passed; full suite 282 passed.
   - **Goal:** Inputs for pass criteria 4 and 5: each MA period alone positive net of costs; positive net in both BTC-up and BTC-down subperiods.
   - **Read in the monograph:**
     - §14 `#e001` → rows "Alt dönemler", "Başarı ölçütleri" 4–5
@@ -625,7 +649,8 @@ Blind reference ledger, scanner↔reference↔ledger parity, full vs windowed re
   - **PENDING / BLOCKED:** Same required args as T4.1.
   - **Out of scope:** Changing tolerances after seeing a diff; editing the ledger to match the reference without a root cause.
   - **Depends on:** T4.1 [#22](https://github.com/ddawnlll/tycho/issues/22), T4.2 [#23](https://github.com/ddawnlll/tycho/issues/23)
-- [ ] **T6.2** Full replay vs windowed replay + restart equality — [#36](https://github.com/ddawnlll/tycho/issues/36)
+- [x] **T6.2** Full replay vs windowed replay + restart equality — [#36](https://github.com/ddawnlll/tycho/issues/36)  
+  Optional checkpoint/stop hook reuses the production simulator; state (book, pending orders, accounting, equity history) carried across windows and an abrupt fresh process. Independent verifier PASS incl. slice-level event equality over multiple seeds. Integrated acceptance: 28 passed; full suite: 346 passed.
   - **Goal:** Parallel time windows (with warm-up) and a restart mid-run give the same results and evidence hashes as one full replay.
   - **Read in the monograph:**
     - §11 `#dogrulama` → "Ek testler" row "Tam replay ↔ pencereli replay" (caught a V7 funding bug)
@@ -666,7 +691,8 @@ Blind reference ledger, scanner↔reference↔ledger parity, full vs windowed re
 
 Pinned stable nautilus_trader executes precomputed targets; parity within pre-written tolerance. Open: 2/2.
 
-- [ ] **T7.1** Nautilus parity: precomputed targets with imposed fills + latency model — [#38](https://github.com/ddawnlll/tycho/issues/38)
+- [x] **T7.1** Nautilus parity: precomputed targets with imposed fills + latency model — [#38](https://github.com/ddawnlll/tycho/issues/38)  
+  Pinned stable `nautilus_trader==1.221.0` (not RC). Real `BacktestEngine` executes a precomputed target array; next-bar imposed fills at the same cost model, required positive latency (zero is refused; removing the model gives same-close fills), supplied funding posted at exact times. Two independent PASS rounds; daily diff `5.68e-14` / total `0.0` USDT against unchanged `config/parity.toml`. Dependency note: the lock downgrades pandas `3.1.0 → 2.3.3`; full suite re-run green under it. Residual: daily bars cannot distinguish 1 ns from 1 s latency.
   - **Goal:** Pinned stable nautilus_trader executes the precomputed target weights on the synthetic tape (it does not decide); parity vs the ledger within the pre-written tolerance.
   - **Read in the monograph:**
     - §10 `#altyapi` → "Nautilus: rolü ve hızlandırma" and "Nautilus uyarıları" (stable pin, latency model mandatory, bypass_logging, run_analysis=False)
