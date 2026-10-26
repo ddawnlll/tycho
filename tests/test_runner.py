@@ -336,3 +336,16 @@ def test_intraday_funding_does_not_invent_a_mark(publication_lag):
     error = "funding mark unavailable" if publication_lag == "0s" else "funding unavailable at payment time"
     with pytest.raises(ValueError, match=error):
         e001._simulate(e001._prepare(tape, dates, panels), targets, settings)
+
+
+def test_config_zero_crossing_rule_matches_d39():
+    cfg = config.load()
+    assert cfg["execution"]["zero_crossing_rule"] == "full_trade_on_zero_or_cross"
+
+
+def test_unsupported_zero_crossing_rule_is_refused(monkeypatch):
+    cfg = config.load()
+    cfg["execution"]["zero_crossing_rule"] = "hold"
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    with pytest.raises(ValueError, match="zero_crossing_rule"):
+        e001._settings(dict(PARAMS), True)

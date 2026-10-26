@@ -40,7 +40,7 @@ Ordering: events sorted by `time`; on equal time, priority MARK < FUNDING < DELI
 ## Rebalance (no-trade band, registry `band`)
 For each instrument in target ∪ positions:
 - `w_cur = qty·mult·mark/equity` (the drifted weight); `d = target − w_cur`.
-- **Zero target or sign crossing** (target == 0 with qty ≠ 0, or sign(target) ≠ sign(w_cur) with both ≠ 0): trade the full `d` (band and partial ratio do not apply). *Coordinator interpretation of "include zero-crossing rules"; the monograph does not spell the rule out. Re-check before prereg.*
+- **Zero target or sign crossing** (target == 0 with qty ≠ 0, or sign(target) ≠ sign(w_cur) with both ≠ 0): trade the full `d` (band and partial ratio do not apply). *Normative owner decision D-39 (`docs/owner-decisions-v1.3.3.md`); config `execution.zero_crossing_rule = "full_trade_on_zero_or_cross"`.*
 - Otherwise no trade if `abs(d) < max(band_relative·abs(target), absolute_band_nav)`; else trade `partial_ratio·d`.
 - qty = trade_weight·equity/(mult·mark), rounded toward zero to a multiple of step_size. If abs(qty)·mult·mark < min_notional → no trade (rounded to zero; C-06 E). Exception: closing an entire position to zero target is allowed below min_notional (reduce to flat).
 - `absolute_band_nav` and `partial_ratio` are PENDING in the monograph: required arguments, never defaulted.

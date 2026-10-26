@@ -33,6 +33,7 @@ from .vectorized import trend_panels, universe_panel, weights_panel
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_TRIALS = _REPO_ROOT / "ledger" / "trials.jsonl"
 _DAILY_MARK_FIXTURE = "SYNTHETIC_PUBLISHED_DAILY_MARK"
+_ZERO_CROSSING_RULE = "full_trade_on_zero_or_cross"
 
 
 def run_e001(tape, params, synthetic: bool) -> dict:
@@ -128,6 +129,11 @@ def run_e001(tape, params, synthetic: bool) -> dict:
 
 def _settings(params, synthetic: bool) -> dict:
     cfg = config.load()
+    # D-39: the ledger implements this rule; the config must not be silently inert.
+    if cfg["execution"]["zero_crossing_rule"] != _ZERO_CROSSING_RULE:
+        raise ValueError(
+            f"execution.zero_crossing_rule must be {_ZERO_CROSSING_RULE!r} (D-39)"
+        )
     if not synthetic:
         # Real runs stay refused until the owner fills every PENDING value.
         for value, name in (
