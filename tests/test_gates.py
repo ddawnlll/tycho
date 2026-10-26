@@ -166,10 +166,22 @@ def test_missing_nested_input_is_blocked():
         assert report["verdict"] == "BLOCKED"
 
 
-def test_pending_input_is_blocked():
-    report = evaluate(**gate_inputs(dsr="PENDING"))
+@pytest.mark.parametrize(
+    "field",
+    [
+        "dsr",
+        "alpha",
+        "strategy_metric",
+        "null_metrics",
+        "component_net_pnl",
+        "subperiod_net_pnl",
+        "holdout_attestation",
+        "alpha_level",
+    ],
+)
+def test_pending_input_is_blocked(field):
+    report = evaluate(**gate_inputs(**{field: "PENDING"}))
     assert report["verdict"] == "BLOCKED"
-    assert report["criteria"]["dsr"]["status"] == "BLOCKED"
 
 
 def test_blocked_takes_precedence_over_fail():

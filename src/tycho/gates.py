@@ -116,8 +116,12 @@ def _reject(status, reason):
     raise _Rejected(status, reason)
 
 
+def _is_pending(value):
+    return isinstance(value, str) and value == "PENDING"
+
+
 def _num(value, name):
-    if value is None or (isinstance(value, str) and value == "PENDING"):
+    if value is None or _is_pending(value):
         _reject(BLOCKED, f"{name} is missing/PENDING")
     if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
         _reject(INVALID, f"{name} must be a real number")
@@ -136,8 +140,8 @@ def _threshold(value, name, low, high, inclusive=False):
 
 
 def _mapping(value, name, allowed):
-    if value is None:
-        _reject(BLOCKED, f"{name} is missing")
+    if value is None or _is_pending(value):
+        _reject(BLOCKED, f"{name} is missing/PENDING")
     if not isinstance(value, Mapping):
         _reject(INVALID, f"{name} must be a mapping")
     unknown = sorted({str(key) for key in value} - set(allowed))
@@ -153,8 +157,8 @@ def _entry(mapping, key, name):
 
 
 def _distribution(value, name):
-    if value is None:
-        _reject(BLOCKED, f"{name} is missing")
+    if value is None or _is_pending(value):
+        _reject(BLOCKED, f"{name} is missing/PENDING")
     if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Iterable):
         _reject(INVALID, f"{name} must be a sequence of numbers")
     values = list(value)
@@ -164,8 +168,8 @@ def _distribution(value, name):
 
 
 def _pairs(value, name):
-    if value is None:
-        _reject(BLOCKED, f"{name} is missing")
+    if value is None or _is_pending(value):
+        _reject(BLOCKED, f"{name} is missing/PENDING")
     if isinstance(value, Mapping):
         items = list(value.items())
     elif isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
