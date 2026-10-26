@@ -444,7 +444,8 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
   - **PENDING / BLOCKED:** All E-001 PENDING values → synthetic placeholders only in --synthetic mode, recorded in the trial record.
   - **Out of scope:** Real data; Modal; DuckDB archive.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17), T4.1 [#22](https://github.com/ddawnlll/tycho/issues/22), T4.2 [#23](https://github.com/ddawnlll/tycho/issues/23)
-- [ ] **T4.4** E-001 diagnostics: constant-notional variant, 1h delay, turnover report — [#25](https://github.com/ddawnlll/tycho/issues/25)
+- [ ] **T4.4** E-001 diagnostics: constant-notional variant, 1h delay, turnover report — [#25](https://github.com/ddawnlll/tycho/issues/25)  
+  Constant-notional variant exists and is proven. Missing: `diagnostic: true` flags, exact traded-weight turnover (current notional/mean-equity differs), forced-delist inclusion, yearly totals, counted turnover trial. 1h delay BLOCKED #51. New tests written in isolated worktree (2 pass / 5 fail on old code); source patch deliberately serialised after #36's checkpoint hook because both own `e001.py`.
   - **Goal:** Diagnostics the monograph requires next to the main run — counted in the trial log, never pass criteria.
   - **Read in the monograph:**
     - §14 `#e001` → "Boyutlandırma" (Teşhis: sabit nominal), "Karar ve dolum" (1h gecikme robustness)
