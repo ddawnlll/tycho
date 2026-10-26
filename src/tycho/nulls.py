@@ -33,6 +33,8 @@ def blocks(w, eligible) -> list[dict]:
     out = []
     for asset in w.columns:
         positions = np.flatnonzero(eligible[asset].to_numpy(dtype=bool))
+        if positions.size == 0:
+            continue
         values = w[asset].to_numpy(dtype=float)[positions]
         signs = np.sign(values)
         starts = np.r_[0, np.flatnonzero(np.diff(signs) != 0) + 1]
@@ -79,6 +81,8 @@ def scramble(w, eligible, *, reps, seed):
         metadata = []
         for asset in w.columns:
             positions = np.flatnonzero(eligible[asset].to_numpy(dtype=bool))
+            if positions.size == 0:
+                continue
             values = w[asset].to_numpy(dtype=float)
             null = np.zeros(len(w))
             for block in per_asset.get(asset, []):
@@ -121,6 +125,8 @@ def random_entry(w, eligible, *, reps, seed, gross_cap=GROSS_CAP):
         pre_cap_total = {}
         for asset in w.columns:
             positions = np.flatnonzero(eligible[asset].to_numpy(dtype=bool))
+            if positions.size == 0:
+                continue
             values = w[asset].to_numpy(dtype=float)
             asset_blocks = per_asset.get(asset, [])
             runs = [b for b in asset_blocks if b["sign"] != 0]

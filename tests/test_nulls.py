@@ -57,6 +57,19 @@ def base(tape, tmp_path_factory):
     return e001.build_experiment(tape, {**PARAMS, "trials_path": str(path)}, True)
 
 
+@pytest.fixture(scope="module")
+def multi_asset(tmp_path_factory):
+    # Default E-001 synthetic multi-asset tape: several columns have zero
+    # eligible days, which is the regression this fixture exists for.
+    tape = make_synthetic_tape(seed=3, n_perps=6, days=500)
+    tape.funding = tape.funding[tape.funding["event_time"].dt.hour == 0].copy()
+    tape.funding["available_at"] = tape.funding["event_time"]
+    tape.mark["available_at"] = tape.mark["event_time"]
+    path = tmp_path_factory.mktemp("null_multi_trials") / "trials.jsonl"
+    base = e001.build_experiment(tape, {**PARAMS, "trials_path": str(path)}, True)
+    return tape, base
+
+
 def test_scramble_preserves_abs_weights_and_date_gross():
     w, eligible = _fixture({"A": [1.0, -2.0, 0.0, 3.0, -4.0],
                             "B": [0.5, 0.5, -1.5, 0.0, 2.0]})
@@ -128,6 +141,49 @@ def test_multi_asset_random_entry_has_non_constant_gross_before_cap():
     for item in nulls.random_entry(w, eligible, reps=4, seed=3, gross_cap=2.0):
         assert (item["weights"].abs().sum(axis=1) <= 2.0 + 1e-12).all()
         assert set(item["pre_cap_total_abs"]) == {"A", "B", "C"}
+
+
+def test_zero_eligible_columns_on_multi_asset_tape(multi_asset, monkeypatch):
+    tape, base = multi_asset
+    eligible = nulls.eligible_days(base)
+    empty = [column for column in eligible.columns if not eligible[column].any()]
+    active = [column for column in eligible.columns if eligible[column].any()]
+    assert empty and active
+
+    w = base["targets"]
+    assert (w[empty] == 0.0).all().all()
+    found = nulls.blocks(w, eligible)
+    assert found
+    assert {block["asset"] for block in found} == set(active)
+
+    for item in nulls.scramble(w, eligible, reps=2, seed=13):
+        pd.testing.assert_frame_equal(item["weights"].abs(), w.abs())
+        assert (item["weights"].abs().sum(axis=1) == w.abs().sum(axis=1)).all()
+        assert (item["weights"][empty] == 0.0).all().all()
+        assert {block["asset"] for block in item["blocks"]} <= set(active)
+
+    for item in nulls.random_entry(w, eligible, reps=2, seed=13, gross_cap=2.0):
+        assert (item["weights"][empty] == 0.0).all().all()
+        assert set(item["pre_cap_total_abs"]) == set(active)
+        for asset in active:
+            assert _lengths(item["weights"], eligible, 1, asset) == _lengths(w, eligible, 1, asset)
+            assert _lengths(item["weights"], eligible, 0, asset) == _lengths(w, eligible, 0, asset)
+            assert item["pre_cap_total_abs"][asset] == pytest.approx(float(w[asset].abs().sum()))
+
+    seen = []
+    original = e001._simulate
+
+    def capture(prep, weights, settings):
+        seen.append(weights.copy())
+        return original(prep, weights, settings)
+
+    monkeypatch.setattr(e001, "_simulate", capture)
+    summary = nulls.run_nulls(tape, PARAMS, reps=1, seed=5, base=base)
+    assert len(seen) == 2
+    assert all((weights[empty] == 0.0).all().all() for weights in seen)
+    assert summary["random_entry"]["gross_cap_bind_count"] >= 0
+    path = base["settings"]["trials_path"]
+    assert [json.loads(line)["role"] for line in path.read_text().splitlines()] == ["null", "null"]
 
 
 def test_same_seed_gives_the_same_null_panels():
