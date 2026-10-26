@@ -611,7 +611,8 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
   - **Depends on:** T5.4 [#31](https://github.com/ddawnlll/tycho/issues/31)
 - [CANCELLED owner 2026-10-25] **X5.a** Full joint-power run — [#33](https://github.com/ddawnlll/tycho/issues/33) · BLOCKED  
   Needs MODAL_USD_CAP (empty) and N_eff (PENDING). Owner cancelled 2026-10-25.
-- [ ] **V5** M5 verifier (nulls, DSR, bootstrap, gates, power) — [#34](https://github.com/ddawnlll/tycho/issues/34) · verifier
+- [x] **V5** M5 verifier (nulls, DSR, bootstrap, gates, power) — [#34](https://github.com/ddawnlll/tycho/issues/34) · verifier  
+  Fresh-context PASS at `c14da4e`: full suite `548 passed in 275.49s`; M5 focused `137 passed`. DSR independently re-derived from Bailey–López de Prado (DSR 0.95 at per-period SR 0.101969), arch bootstrap row-for-row, HAC alpha vs statsmodels, D-40 invariants and roles, gate precedence/holdout behavior, and power units/CIs/conjunction all verified. No majors. Minors: random-entry preserves the run/flat slot pattern (documented), an unreachable bool `n_eff`, eager config load in `run_components`.
   - **Goal:** Clean-context review of the statistical gate: correct DSR, nulls that preserve exposure, fail-closed evaluator.
   - **Read in the monograph:**
     - §11 "Korunmuş hakem, null modeli ve birleşik güç"; §14 "Başarı ölçütleri"; registry `first_experiment`
