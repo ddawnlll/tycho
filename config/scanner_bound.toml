@@ -1,0 +1,6 @@
+# D-41: cost-bearing scanner check is max over days of
+# |scanner_equity - ledger_equity| / ledger_equity <= max_relative_equity_diff.
+# A pre-decision cost-bearing diagnostic ran at 8d9db4b before D-41 existed.
+# D-41 fixed this 1e-4 bound; it was committed in e0a2451 before all post-D-41
+# cost-bearing comparisons and is unchanged since, so it was not tuned to results.
+max_relative_equity_diff = 0.0001
