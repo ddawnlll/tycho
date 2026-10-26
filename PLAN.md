@@ -627,7 +627,9 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
 
 Blind reference ledger, scanner↔reference↔ledger parity, full vs windowed replay. Open: 3/3.
 
-- [ ] **T6.1** Blind independent reference ledger + three-way parity — [#35](https://github.com/ddawnlll/tycho/issues/35)
+- [x] **T6.1** Blind independent reference ledger + three-way parity — [#35](https://github.com/ddawnlll/tycho/issues/35)  
+  Blind-authored independent ledger from `docs/ledger-spec.md` only (21 goldens, exact reference↔sequential at 500/100000, four seeded faults rejected). D-39 crossing rule required with no default; D-41 scanner exact on costless and relative equity error ≤ `1e-4` on cost-bearing fixtures, bound fixed by the owner in D-41 and committed before all post-decision comparisons. Frozen tolerance untouched. Two fresh-context reviews: one provenance FAIL (#73) then PASS after an honest wording fix; numeric bound unchanged.
+
   - **Goal:** A second, simple, independently written PnL calculation; scanner ↔ reference ↔ sequential ledger agree within a tolerance written before the first run.
   - **Read in the monograph:**
     - §11 `#dogrulama` → "Ek testler" row "Parity", "Oracle'lar" (Parity Oracle light)
