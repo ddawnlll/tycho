@@ -358,7 +358,7 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
     - §14 row "Karar ve dolum" (band rule); registry `first_experiment.band`, `accounting_ledger`
   - **Files:**
     ```text
-    new: tests/golden/*.json (one file per case: inputs, policy args, expected ledger rows), tests/golden/README.md (units, sign conventions)
+    new: tests/golden/cases/*.json (one file per case: inputs, policy args, expected ledger rows; each carries its step-by-step derivation), tests/golden/test_golden.py
     ```
   - **Contract:**
     Cases (each with inputs and expected equity/wallet/fees/funding/position after every event):
@@ -374,7 +374,8 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
     Every PENDING parameter (abs_floor, partial ratio, zero-crossing rule, nominal) appears as an explicit input value of the case, marked synthetic.
   - **Acceptance:**
     ```bash
-    uv run python -c "import json,glob; [json.load(open(f)) for f in glob.glob('tests/golden/*.json')]"  # cases parse; consumed by T4.1
+    uv run python -c "import json,glob; [json.load(open(f)) for f in glob.glob('tests/golden/cases/*.json')]"  # cases parse; consumed by T4.1
+    uv run pytest -q tests/golden
     ```
   - **PENDING / BLOCKED:** All PENDING values are case inputs, never library defaults.
   - **Out of scope:** Reading src/tycho ledger/scanner code; editing a golden file after it is written (guard: write-once).
