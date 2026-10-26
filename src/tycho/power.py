@@ -16,9 +16,17 @@ attestation, and therefore every gate report here has ``holdout=BLOCKED`` and
 
 Synthetic parameters (explicitly NOT monograph values)
 ------------------------------------------------------
-``planted_sharpe`` is the annualized Sharpe of the latent regime-conditional
-drift (what an oracle knowing the regime would earn before costs), not the
-realized MA-ensemble Sharpe.  The realized Sharpe is reported per scenario.
+``planted_sharpe`` is the **annualized** Sharpe of the latent
+regime-conditional drift.  The generator sets
+
+    daily_vol = annual_vol / sqrt(365)
+    daily_mean = planted_sharpe * daily_vol / sqrt(365)
+
+so the conditional annualized Sharpe is ``daily_mean / daily_vol * sqrt(365)
+= planted_sharpe``.  ``annual_vol`` is explicit per scenario.  The realized
+MA-ensemble Sharpe is reported per scenario on the same 365-day annualization;
+it is not the planted oracle value.
+
 Other explicit synthetic inputs: ``DSR_N_TRIALS_EFF=4`` (the four MA periods),
 ``DSR_TRIAL_SR_VARIANCE=1e-4`` (per-period trial Sharpe variance),
 ``HAC_MAXLAGS=5``, ``NULL_REPS=99``.  These are study knobs, not guesses for
@@ -42,15 +50,26 @@ applied to the combined MA position path with a cheap cost model
 This analogue has no funding, fill, latency or band model.  It is documented
 here so the criterion-3 numbers are read as a synthetic sensitivity study, not
 as a reproduction of a real E-001 null run.  With ``NULL_REPS=99`` the 1% gate
-quantile is effectively the second-largest null, which is conservative
-relative to the config's 2000 repetitions.
+cutoff is estimated from only 99 nulls; it is noisier and slightly optimistic
+(typically below) the config's 2000-rep cutoff, not conservative.
 
 Benchmark
 ---------
 For every scenario except ``correlated`` the beta-adjusted-alpha benchmark is
-the same path's buy-and-hold return.  ``correlated`` uses a synthetic benchmark
-that shares 50% of the asset's noise common factor and has no planted drift, so
-criterion 2 controls for that shared factor rather than for the asset itself.
+the same path's **raw buy-and-hold proxy**.  This is not the D-40 equal-risk
+buy-and-hold baseline (no rebalancing, risk budget, costs, band or ledger).
+``correlated`` uses a synthetic benchmark that shares 50% of the asset's noise
+common factor and has no planted drift, so criterion 2 controls for that shared
+factor rather than for the asset itself.
+
+Approximations and scope
+------------------------
+The strategy is a raw equal-weight ensemble of the four MA rules.  It has no
+volatility targeting, no rebalance band, no D-39 zero-crossing rule, no
+sequential ledger, and no funding, fill, slippage or latency model.  Criterion
+4 components are singleton MA net-PnL sums and criterion 5 uses the same raw
+strategy PnL.  Consequently this study measures **gate discrimination under
+those approximations**, not E-001 joint power on the production pipeline.
 
 Limitation
 ----------
@@ -100,7 +119,7 @@ SCENARIOS = {
         "benchmark_correlation": 1.0,
     },
     "weak": {
-        "planted_sharpe": 0.15,
+        "planted_sharpe": 1.0,
         "annual_vol": 0.60,
         "regime_switch_prob": 0.05,
         "cost_bps": 5.0,
@@ -108,7 +127,7 @@ SCENARIOS = {
         "benchmark_correlation": 1.0,
     },
     "strong": {
-        "planted_sharpe": 1.0,
+        "planted_sharpe": 6.0,
         "annual_vol": 0.60,
         "regime_switch_prob": 0.05,
         "cost_bps": 5.0,
@@ -116,7 +135,7 @@ SCENARIOS = {
         "benchmark_correlation": 1.0,
     },
     "cost_heavy": {
-        "planted_sharpe": 1.0,
+        "planted_sharpe": 6.0,
         "annual_vol": 0.60,
         "regime_switch_prob": 0.05,
         "cost_bps": 100.0,
@@ -124,7 +143,7 @@ SCENARIOS = {
         "benchmark_correlation": 1.0,
     },
     "fat_tailed": {
-        "planted_sharpe": 1.0,
+        "planted_sharpe": 6.0,
         "annual_vol": 0.60,
         "regime_switch_prob": 0.05,
         "cost_bps": 5.0,
@@ -132,7 +151,7 @@ SCENARIOS = {
         "benchmark_correlation": 1.0,
     },
     "correlated": {
-        "planted_sharpe": 1.0,
+        "planted_sharpe": 6.0,
         "annual_vol": 0.60,
         "regime_switch_prob": 0.05,
         "cost_bps": 5.0,
@@ -148,15 +167,37 @@ _SYNTHETIC_INPUTS = {
     "dsr_trial_sharpe_variance": DSR_TRIAL_SR_VARIANCE,
     "hac_maxlags": HAC_MAXLAGS,
     "null_reps": NULL_REPS,
+    "null_reps_note": (
+        "99 reps is a study knob; fewer than config 2000, so the 1% cutoff "
+        "is noisier and slightly optimistic"
+    ),
+    "units": (
+        "planted_sharpe and realized strategy Sharpe are annualized "
+        "(365-day); daily mean = planted_sharpe * daily_vol / sqrt(365)"
+    ),
     "planted_sharpe_definition": (
         "annualized Sharpe of the latent state-conditional drift (oracle), "
         "not the realized MA-ensemble Sharpe"
+    ),
+    "scope": (
+        "gate discrimination under synthetic approximations, not E-001 joint power"
+    ),
+    "approximations": (
+        "raw MA ensemble; no vol targeting, band, D-39 rule, ledger, funding, "
+        "fills, slippage or latency; criterion 2 benchmark is a raw buy-and-hold "
+        "proxy, not the D-40 equal-risk buy-and-hold baseline"
     ),
     "null_analogue": (
         "D-40 block-sign scramble + run-length random entry on the combined "
         "MA weights; costs recomputed as bps*turnover, no ledger"
     ),
 }
+
+
+def _daily_drift(planted_sharpe, annual_vol):
+    """Daily mean return for a declared annualized Sharpe at a given annual vol."""
+    daily_vol = annual_vol / math.sqrt(365.0)
+    return planted_sharpe * daily_vol / math.sqrt(365.0)
 
 
 def _daily_returns(
@@ -181,25 +222,27 @@ def _daily_returns(
     root = math.sqrt(benchmark_correlation)
     resid = math.sqrt(1.0 - benchmark_correlation)
     returns = (
-        planted_sharpe * daily_vol * state
+        _daily_drift(planted_sharpe, annual_vol) * state
         + daily_vol * (root * common + resid * idio)
     )
     if benchmark_correlation == 1.0:
         benchmark = returns
     else:
         benchmark = daily_vol * (root * common + resid * bench_idio)
-    return returns, benchmark
+    return returns, benchmark, state
 
 
 def _ma_positions(close, period):
     ma = pd.Series(close).rolling(period).mean().to_numpy()
     raw = np.sign(close - ma)
     raw[~np.isfinite(ma)] = 0.0
-    # A decision at t is held for the return from t to t+1.
-    return np.r_[0.0, raw[:-1]]
+    # Signal known at bar t; _pnl applies it to the next bar's return.
+    return raw
 
 
 def _pnl(positions, returns, cost_rate):
+    # prev[t] is the position set at t-1, so pnl[t] earns return t without
+    # using any information from bar t or later.
     prev = np.r_[0.0, positions[:-1]]
     prev_prev = np.r_[0.0, prev[:-1]]
     return prev * returns - cost_rate * np.abs(prev - prev_prev)
@@ -288,7 +331,7 @@ def run_trial(scenario, *, seed, null_reps=NULL_REPS):
     """Run one independent synthetic trial and return its gate evidence."""
     params = SCENARIOS[scenario] if isinstance(scenario, str) else scenario
     rng = np.random.default_rng(seed)
-    returns, benchmark = _daily_returns(
+    returns, benchmark, _state = _daily_returns(
         rng,
         planted_sharpe=params["planted_sharpe"],
         annual_vol=params["annual_vol"],
@@ -393,6 +436,8 @@ def run_study(
             "component_periods": list(MA_PERIODS),
         },
         "synthetic_inputs": {**_SYNTHETIC_INPUTS, "null_reps": null_reps},
+        "scope": _SYNTHETIC_INPUTS["scope"],
+        "approximations": _SYNTHETIC_INPUTS["approximations"],
         "pass_definition": "criteria 1-5 PASS; criterion 6 holdout is never simulated",
         "scenarios": {},
     }
@@ -431,7 +476,7 @@ def run_study(
                 Counter(status["holdout"] for status in statuses)
             ),
             "verdict_counts": dict(Counter(record["verdict"] for record in records)),
-            "mean_realized_strategy_sharpe": float(
+            "mean_realized_annualized_strategy_sharpe": float(
                 np.mean([record["strategy_sharpe"] for record in records])
             ),
         }
@@ -471,7 +516,7 @@ def report(summary):
         ),
         "",
         f"{'scenario':<14} {'n':>3} {'pass':>5} {'rate':>6} {'95% CI':>16} "
-        f"{'realized SR':>12} {'holdout':>8}",
+        f"{'realized SR (ann.)':>18} {'holdout':>8}",
     ]
     for name in SCENARIO_ORDER:
         if name not in summary["scenarios"]:
@@ -481,9 +526,13 @@ def report(summary):
         lines.append(
             f"{name:<14} {item['n']:>3} {item['passes']:>5} "
             f"{item['pass_rate']:>6.3f} [{low:>5.3f}, {high:>5.3f}] "
-            f"{item['mean_realized_strategy_sharpe']:>12.2f} "
+            f"{item['mean_realized_annualized_strategy_sharpe']:>18.2f} "
             f"{str(item['holdout_status_counts']):>8}"
         )
+    lines.append(f"units: {summary['synthetic_inputs']['units']}")
+    lines.append(f"null reps: {summary['synthetic_inputs']['null_reps_note']}")
+    lines.append(f"scope: {summary['scope']}")
+    lines.append(f"approximations: {summary['approximations']}")
     if "false_positive_rate" in summary:
         lines.append(
             f"false-positive rate (zero edge): "
