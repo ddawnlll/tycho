@@ -82,6 +82,15 @@ Wave 1: #43 (slot A), genuinely blind #35 (slot B), #28 (slot C), coordinator ve
 Then follow `docs/dispatch-plan.md`: independent verification before closure, exact acceptance and full suite on integrated main, one PR per task, PLAN/PROGRESS updated together after each merge.
 No Modal execution: skill/PLAN prohibit it and the budget is owner-only; small synthetic checks stay local. Undefined scientific rules remain BLOCKED, never guessed.
 Owner decisions discovered: #45 (zero-crossing policy), #46 (null/baseline preservation rules). Public scanner interface supplied in `docs/scanner-interface.md` for blind-worker request #47.
+
+### Owner decisions v1.3.3 — 2026-10-26 (binding annex)
+`docs/owner-decisions-v1.3.3.md` (commit `4b94313`) resolves the five blockers and takes precedence over the monograph/registry where they conflict or are silent:
+- **D-39 (#45):** zero target / sign crossing trades the full difference; band and partial ratio do not apply; closing to flat is allowed below min_notional; config key `execution.zero_crossing_rule = "full_trade_on_zero_or_cross"`.
+- **D-40 (#46):** nulls from the realized target-weight panel through the same sequential ledger; run-scramble and random-entry definitions, preserved/unpreserved lists, equal-risk B&H with score +1, BTC baseline with b = target vol, no-trade baseline; trial `role` field; DSR family membership stays PENDING.
+- **D-41 (#53):** exact three-way parity only for reference ↔ sequential ↔ Nautilus; scanner exact on costless fixtures and relative equity bound `1e-4` on cost-bearing ones, frozen first in new `config/scanner_bound.toml`; scanner never used in E-001 criteria.
+- **D-42 (#52):** manifest field set is the text∪registry union with `expert_id` and required `snapshot_schema`.
+- **D-43 (#51):** the 1h-delay diagnostic is out of the synthetic phase and deferred to the real-data phase; V4 cannot fail because of it.
+
 Additional blockers: #51 (1h execution tape), #52 (manifest text/registry conflict), #53 (cost-bearing exact scanner parity). V0/V1/V4 fixes: #48/#58, #49, #50. #30 implementation is in PR #54 with closed-bar review fix #56; no unchecked item is marked complete.
 Slot B staging: original tolerance-first commit `26f1d9b` is merged unchanged, independently reviewed and full-suite green. Dispatch explicitly allows #38 after this standalone commit; #35 remains open/BLOCKED (#45/#53), and no general scanner parity is claimed. Install Nautilus only in an exclusive test-free window.
 
