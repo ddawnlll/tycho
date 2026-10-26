@@ -119,4 +119,6 @@
   - #51 no intraday executable tape → blocks the 1h-delay part of T4.4 and partly V4 #27.
 - V4 #27 and V6 #37 therefore cannot PASS yet; V7 #39 is the stop condition and cannot pass while non-cancelled items remain open. T7.1 parity itself is green at the frozen tolerance.
 - Residual risks recorded: verifiers share the owner-requested DeepSeek model family (fresh contexts, no authorship); Nautilus forces pandas 3.1.0→2.3.3 (suite green, earlier numbers not directly comparable); daily bars cannot distinguish 1 ns vs 1 s latency in the Nautilus fixture.
+- V7 #39 independent audit at `f1a5440`: **BLOCKED, not PASS**. It reproduced the full suite (`361 passed in 165.55s`), confirmed protected paths/PENDING/parity-tolerance integrity, ran its own PIT and Nautilus probes, and verified no weakened or skipped tests. Stop condition unmet because every non-cancelled open item remains `[ ]` behind the owner decisions above. Findings: T4.1 hardcodes the zero-crossing interpretation (covered by #45); T4.4's 1h sub-item is not implemented (covered by #51); checkpoint hashes are unkeyed (caller-supplied local evidence, residual). Final summary posted on #39.
+
 
