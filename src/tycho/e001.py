@@ -35,8 +35,8 @@ _DEFAULT_TRIALS = _REPO_ROOT / "ledger" / "trials.jsonl"
 _DAILY_MARK_FIXTURE = "SYNTHETIC_PUBLISHED_DAILY_MARK"
 
 
-def run_e001(tape, params, synthetic: bool) -> dict:
-    """Run the E-001 signal through the authoritative ledger; append one trial per variant."""
+def build_experiment(tape, params, synthetic: bool) -> dict:
+    """Run the E-001 signal/sizing stage; shared by the main run and its baselines."""
     settings = _settings(params, synthetic)
     if not tape.meta.get("synthetic") or any(
         not getattr(tape, name)["source"].eq("synthetic").all()
@@ -54,13 +54,31 @@ def run_e001(tape, params, synthetic: bool) -> dict:
     )
     universe = universe_panel(provider, panels["as_of"])
     universe.index = dates
+    targets, member, stale, score = size_targets(tape, settings, panels, universe)
+    prep = _prepare(tape, dates, panels)
+    return {
+        "settings": settings,
+        "panels": panels,
+        "universe": universe,
+        "targets": targets,
+        "member": member,
+        "stale": stale,
+        "score": score,
+        "prep": prep,
+    }
+
+
+def size_targets(tape, settings, panels, universe, *, score=None, n=None):
+    """Apply the E-001 sizing rules to a score panel (default: the real signal)."""
+    score = panels["score"] if score is None else score
+    n = settings["universe_size"] if n is None else n
     targets = weights_panel(
-        panels,
+        {**panels, "score": score},
         universe,
         _cov_fn(tape, settings["ewma_convention"]),
         settings["target_vol"],
         settings["rho"],
-        settings["universe_size"],
+        n,
         settings["vol_cap_multiple"],
         settings["gross_leverage_cap"],
         on_abstain=settings["on_abstain"],
@@ -72,10 +90,18 @@ def run_e001(tape, params, synthetic: bool) -> dict:
     limit = int(pd.Timedelta(settings["max_staleness"]) / pd.Timedelta(days=1))
     stale = ~panels["close"].ffill(limit=limit).notna()
     targets = targets.mask(stale, 0.0)
-    score = panels["score"].where(member, 0.0).fillna(0.0).mask(stale, 0.0)
-    constant = score * settings["constant_notional_weight"]
+    used = score.where(member, 0.0).fillna(0.0).mask(stale, 0.0)
+    return targets, member, stale, used
 
-    prep = _prepare(tape, dates, panels)
+
+def run_e001(tape, params, synthetic: bool) -> dict:
+    """Run the E-001 signal through the authoritative ledger; append one trial per variant."""
+    built = build_experiment(tape, params, synthetic)
+    settings = built["settings"]
+    targets = built["targets"]
+    constant = built["score"] * settings["constant_notional_weight"]
+    prep = built["prep"]
+    dates = prep["dates"]
     results = {}
     runs = {}
     records = []
