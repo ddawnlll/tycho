@@ -37,24 +37,26 @@ _WARM_OFFSET = pd.Timedelta(hours=12)
 def run_e001(tape, params, synthetic: bool) -> dict:
     """Run the E-001 signal through the authoritative ledger; append one trial per variant."""
     settings = _settings(params, synthetic)
-    panels = trend_panels(tape, settings["ma_periods_days"], settings["ewma_convention"])
+    panels = trend_panels(
+        tape, settings["ma_periods_days"], settings["ewma_convention"],
+        decision_lag=settings["decision_lag"],
+    )
     dates = panels["score"].index
     provider = MarketStateProvider(
         tape, settings["universe_size"], settings["min_history_days"]
     )
-    universe = universe_panel(provider, dates)
-    bars = _fixed_view(tape).bars_1d.sort_values(
-        ["instrument_id", "event_time"], kind="stable"
-    )
+    universe = universe_panel(provider, panels["as_of"])
+    universe.index = dates
     targets = weights_panel(
         panels,
         universe,
-        _cov_fn(bars, settings["ewma_convention"]),
+        _cov_fn(tape, settings["ewma_convention"]),
         settings["target_vol"],
         settings["rho"],
         settings["universe_size"],
         settings["vol_cap_multiple"],
         settings["gross_leverage_cap"],
+        on_abstain=settings["on_abstain"],
     )
     member = universe.reindex(
         index=panels["score"].index, columns=panels["score"].columns, fill_value=False
@@ -124,6 +126,8 @@ def _settings(params, synthetic: bool) -> dict:
     universe_size = int(pick("universe_size", cfg["universe"]["size"]))
     settings = {
         "ewma_convention": _explicit(params, "ewma_convention"),
+        "decision_lag": str(pd.Timedelta(_explicit(params, "decision_lag"))),
+        "on_abstain": _explicit(params, "on_abstain"),
         "max_staleness": str(pd.Timedelta(_explicit(params, "max_staleness"))),
         "absolute_band_nav": float(_explicit(params, "absolute_band_nav")),
         "partial_ratio": float(_explicit(params, "partial_ratio")),
@@ -174,18 +178,15 @@ def _fixed_view(tape):
     return tape.as_of(tape.bars_1d["available_at"].max())
 
 
-def _cov_fn(bars, convention):
-    """ewma_cov over bars stamped at or before the decision date.
-
-    shortcut: revisions are applied from their bar stamp, the same shortcut
-    trend_panels documents; PIT revision replay needs an as-of bar store.
-    """
+def _cov_fn(tape, convention):
+    """EWMA covariance on closed bars and revisions visible at decision as_of."""
 
     def cov(date, active):
         active = list(active)
         if not active:
             return pd.DataFrame(index=active, columns=active, dtype=float)
-        subset = bars[(bars["event_time"] <= date) & bars["instrument_id"].isin(active)]
+        bars = tape.as_of(date).bars_1d
+        subset = bars[(bars["event_time"] < date) & bars["instrument_id"].isin(active)]
         snapshot = SnapshotRef(
             snapshot_id="panel",
             as_of=date,
