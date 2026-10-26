@@ -588,7 +588,8 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
   - **PENDING / BLOCKED:** DSR inputs from T5.2.
   - **Out of scope:** Opening the holdout; changing thresholds.
   - **Depends on:** T5.1 [#28](https://github.com/ddawnlll/tycho/issues/28), T5.2 [#29](https://github.com/ddawnlll/tycho/issues/29), T5.3 [#30](https://github.com/ddawnlll/tycho/issues/30)
-- [ ] **T5.5** Synthetic joint power + seeded false positives (small local sample) — [#32](https://github.com/ddawnlll/tycho/issues/32)
+- [x] **T5.5** Synthetic joint power + seeded false positives (small local sample) — [#32](https://github.com/ddawnlll/tycho/issues/32)  
+  Seeded local study: 40 independent trials per scenario (zero, weak, strong, cost-heavy, fat-tailed, correlated), criteria 1–5 through the real `gates.evaluate`, 95% Clopper-Pearson CIs, sample size fixed and no extrapolation. Result: zero-edge 0/40 (FP 0.000), strong edge 4/40, fat-tailed 6/40, correlated 5/40; false-negative 0.900. Holdout is never simulated. Fully disclosed as a raw-MA approximation (no vol target/band/D-39/ledger/funding; criterion-2 benchmark is a raw B&H proxy, not D-40 equal-risk). Two review rounds fixed annualization units (#78) and pinned the five-way conjunction in tests (#79). Integrated acceptance 16 passed; full suite 548 passed.
   - **Goal:** Measure how often all six criteria pass together on synthetic processes — zero edge, weak edge, costly, fat-tailed, correlated — and report false positive/negative rates.
   - **Read in the monograph:**
     - §11 `#dogrulama` → "Korunmuş hakem…" row "Sentetik güç"
