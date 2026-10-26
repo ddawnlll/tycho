@@ -79,9 +79,20 @@ def run_e001(tape, params, synthetic: bool) -> dict:
     results = {}
     runs = {}
     records = []
-    for variant, weights in (("main", targets), ("constant_notional", constant)):
-        run = runs[variant] = _simulate(prep, weights, settings)
-        results[variant] = run["metrics"]
+    # The 1h-delay fill diagnostic remains BLOCKED on #51; this daily fixture is
+    # reported as-is. Turnover is derived from the main run, never a gate input.
+    for variant, weights in (
+        ("main", targets), ("constant_notional", constant), ("turnover", None)
+    ):
+        if weights is not None:
+            run = runs[variant] = _simulate(prep, weights, settings)
+            results[variant] = run["metrics"]
+        else:
+            main = results["main"]
+            results[variant] = {
+                "turnover": main["turnover"],
+                "turnover_by_year": main["turnover_by_year"],
+            }
         records.append(
             trials.append_trial(
                 settings["trials_path"],
@@ -94,7 +105,8 @@ def run_e001(tape, params, synthetic: bool) -> dict:
                     "git_head": _git_head(),
                     "dataset_hash": _dataset_hash(tape),
                     "seed": tape.meta.get("seed"),
-                    "metrics": run["metrics"],
+                    "metrics": results[variant],
+                    **({"diagnostic": True} if variant != "main" else {}),
                 },
             )
         )
@@ -333,8 +345,9 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
         "next_day": 0, "watermark": None,
         "wallet": nominal, "positions": {}, "entry": {}, "orders": {},
         "equity_series": [nominal], "identity_error": 0.0,
-        "fees_total": 0.0, "funding_total": 0.0, "traded_notional": 0.0,
-        "trade_count": 0, "weights_rows": [], "cost_rows": [], "rate_rows": [],
+        "fees_total": 0.0, "funding_total": 0.0, "traded_weight": 0.0,
+        "turnover_by_year": {}, "trade_count": 0,
+        "weights_rows": [], "cost_rows": [], "rate_rows": [],
     }
     if checkpoint is not None:
         try:
@@ -361,8 +374,12 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
                         or any(type(v) not in (int, float) or v == 0 for v in book.values())):
                     raise ValueError(f"invalid checkpoint {key}")
             if (any(type(saved[k]) not in (int, float) for k in (
-                    "wallet", "identity_error", "fees_total", "funding_total", "traded_notional"))
+                    "wallet", "identity_error", "fees_total", "funding_total", "traded_weight"))
                     or type(saved["trade_count"]) is not int or saved["trade_count"] < 0
+                    or not isinstance(saved["turnover_by_year"], dict)
+                    or any(type(year) is not str or type(value) not in (int, float)
+                           or not np.isfinite(value)
+                           for year, value in saved["turnover_by_year"].items())
                     or any(v <= 0 for v in saved["entry"].values())):
                 raise ValueError("invalid checkpoint accounting values")
         except (KeyError, TypeError, ValueError) as exc:
@@ -375,9 +392,10 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
     wallet, positions, entry, orders = (state[k] for k in ("wallet", "positions", "entry", "orders"))
     equity_series = state["equity_series"]
     identity_error = state["identity_error"]
-    fees_total, funding_total, traded_notional = (
-        state[k] for k in ("fees_total", "funding_total", "traded_notional")
+    fees_total, funding_total, traded_weight = (
+        state[k] for k in ("fees_total", "funding_total", "traded_weight")
     )
+    turnover_by_year = state["turnover_by_year"]
     trade_count = state["trade_count"]
     weights_rows, cost_rows, rate_rows = (
         state[k] for k in ("weights_rows", "cost_rows", "rate_rows")
@@ -393,6 +411,17 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
             previous_inst = prep["instruments"][i - 1][instrument_id]
             if instruments[instrument_id].contract_multiplier != previous_inst.contract_multiplier:
                 raise ValueError("contract multiplier changed with exposure or a queued order; migration policy required")
+        opening_wallet = wallet
+        close_marks = {}
+        for instrument_id in prep["marks"].columns:
+            mark = _value(prep["marks"], date, instrument_id)
+            if mark is not None:
+                if mark <= 0:
+                    raise ValueError(f"invalid mark: {instrument_id} at {as_of}")
+                close_marks[instrument_id] = mark
+        valuation_marks = dict(close_marks)
+        day_trades = []
+        day_funding = 0.0
         events = []
         # Recreate the previous close's book: a zero-cost fill at the average
         # entry price restores qty and entry exactly.
@@ -408,6 +437,12 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
             if price is None or not np.isfinite(price) or price <= 0:
                 raise ValueError(f"funding mark unavailable: {instrument_id} at {timestamp}")
             events.append(_funding(timestamp, instrument_id, rate, price))
+            day_funding += (
+                -positions[instrument_id]
+                * instruments[instrument_id].contract_multiplier
+                * price
+                * rate
+            )
         costs, rates = {}, {}
         for instrument_id, qty in orders.items():
             eligible = prep["as_of"].iloc[i - 1] + pd.Timedelta(settings["executable_latency"])
@@ -439,7 +474,7 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
             events.append(
                 _fill(as_of, instrument_id, qty, price, settings["taker_fee"], slip)
             )
-            traded_notional += notional
+            day_trades.append((qty, instrument_id, price))
             trade_count += 1
             costs[instrument_id] = settings["taker_fee"] + slip / 1e4
         delists = prep["delists"][i]
@@ -464,21 +499,17 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
                     "slippage_bps": settings["delist_exit_slippage_bps"],
                 }
             )
-        close_marks = {}
-        for instrument_id in prep["marks"].columns:
-            mark = _value(prep["marks"], date, instrument_id)
-            if mark is not None:
-                if mark <= 0:
-                    raise ValueError(f"invalid mark: {instrument_id} at {as_of}")
-                close_marks[instrument_id] = mark
-                events.append(
-                    {
-                        "time": as_of.isoformat(),
-                        "type": "MARK",
-                        "instrument_id": instrument_id,
-                        "mark_price": mark,
-                    }
-                )
+            day_trades.append((-positions[instrument_id], instrument_id, mark))
+            valuation_marks[instrument_id] = mark
+        for instrument_id, mark in close_marks.items():
+            events.append(
+                {
+                    "time": as_of.isoformat(),
+                    "type": "MARK",
+                    "instrument_id": instrument_id,
+                    "mark_price": mark,
+                }
+            )
         for timestamp, instrument_id, rate, _, _ in prep["funding"].get(i, []):
             if rate is not None:
                 rates[instrument_id] = rates.get(instrument_id, 0.0) + rate
@@ -487,7 +518,23 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
                 if instrument_id not in close_marks:
                     raise ValueError(f"valuation mark unavailable: {instrument_id} at {as_of}")
 
-        opening_wallet = wallet
+        if day_trades:
+            # Traded weight uses equity just before this day's trades, marked at
+            # that day's closes; warm-start reconstruction fills are not trades.
+            equity_before = opening_wallet + day_funding + sum(
+                qty * instruments[instrument_id].contract_multiplier
+                * (valuation_marks[instrument_id] - entry[instrument_id])
+                for instrument_id, qty in positions.items()
+            )
+            for qty, instrument_id, price in day_trades:
+                weight = (
+                    abs(qty) * instruments[instrument_id].contract_multiplier * price
+                    / equity_before
+                )
+                traded_weight += weight
+                year = str(date.year)
+                turnover_by_year[year] = turnover_by_year.get(year, 0.0) + weight
+
         snapshots = run_ledger(wallet, instruments, events) if events else []
         if snapshots:
             last = snapshots[-1]
@@ -554,13 +601,15 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
             )
 
     metrics = _metrics(
-        equity_series, fees_total, funding_total, traded_notional, trade_count
+        equity_series, fees_total, funding_total, traded_weight, turnover_by_year,
+        trade_count,
     )
     state.update(
         next_day=stop, watermark=prep["as_of"].iloc[stop - 1].isoformat() if stop else None,
         wallet=wallet, positions=positions, entry=entry, orders=orders,
         identity_error=identity_error, fees_total=fees_total, funding_total=funding_total,
-        traded_notional=traded_notional, trade_count=trade_count,
+        traded_weight=traded_weight, turnover_by_year=turnover_by_year,
+        trade_count=trade_count,
     )
     evidence_hash = canonical_hash(state)
     return {
@@ -613,7 +662,7 @@ def _scanner_diff(prep, weights_rows, cost_rows, rate_rows, equity_series, setti
     return float(np.max(np.abs(pnl - ledger))) if ledger.size else 0.0
 
 
-def _metrics(equity_series, fees, funding, traded_notional, trade_count) -> dict:
+def _metrics(equity_series, fees, funding, traded_weight, turnover_by_year, trade_count) -> dict:
     equity = np.asarray(equity_series, dtype=float)
     returns = equity[1:] / equity[:-1] - 1.0
     peak = np.maximum.accumulate(equity)
@@ -621,7 +670,10 @@ def _metrics(equity_series, fees, funding, traded_notional, trade_count) -> dict
         "sharpe": scanner.annualized_sharpe(returns, 365) if returns.size > 1 else np.nan,
         "total_return": float(equity[-1] / equity[0] - 1.0),
         "max_drawdown": float(np.max(1.0 - equity / peak)),
-        "turnover": float(traded_notional / equity.mean()),
+        "turnover": float(traded_weight),
+        "turnover_by_year": {
+            year: float(value) for year, value in sorted(turnover_by_year.items())
+        },
         "fees": float(fees),
         "funding": float(funding),
         "trade_count": int(trade_count),

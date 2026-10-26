@@ -125,20 +125,24 @@ def test_components_execute_pipeline_and_log_each_actual_trial(tmp_path, monkeyp
     assert periods_seen == [[k] for k in periods]
     assert "ma_periods_days" not in params
     records = [json.loads(line) for line in params["trials_path"].read_text().splitlines()]
-    assert len(records) == 2 * len(periods)
+    assert len(records) == 3 * len(periods)
     assert verify_chain(params["trials_path"])
     assert len({out["params_hash"] for out in result.values()}) == len(periods)
     for i, k in enumerate(periods):
         out = result[k]
         assert out["execution_policy"] == params["synthetic_execution_policy"]
-        pair = records[2*i:2*i+2]
-        assert out["trial_hashes"] == [record["hash"] for record in pair]
-        for record in pair:
+        trio = records[3*i:3*i+3]
+        assert [record["variant"] for record in trio] == [
+            "main", "constant_notional", "turnover"
+        ]
+        assert out["trial_hashes"] == [record["hash"] for record in trio]
+        for record in trio:
             assert record["execution_policy"] == params["synthetic_execution_policy"]
             assert record["params_hash"] == out["params_hash"]
             assert record["metrics"] == out["metrics"][record["variant"]]
         assert out["metrics"]["main"]["trade_count"] > 0
         assert out["metrics"]["main"]["fees"] > 0
+        assert out["metrics"]["turnover"]["turnover_by_year"]
 
 
 @pytest.mark.parametrize("periods", [[], [20, 20], [0], [20.5], [True]])

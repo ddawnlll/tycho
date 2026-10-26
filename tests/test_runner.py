@@ -47,8 +47,9 @@ def test_run_completes_with_metrics(result, tape):
     assert out["kind"] == "SYNTHETIC"
     assert out["execution_policy"] == PARAMS["synthetic_execution_policy"]
     assert out["dataset_hash"] and out["params_hash"]
-    assert set(out["metrics"]) == {"main", "constant_notional"}
-    for metrics in out["metrics"].values():
+    assert set(out["metrics"]) == {"main", "constant_notional", "turnover"}
+    for variant in ("main", "constant_notional"):
+        metrics = out["metrics"][variant]
         assert metrics["days"] == len(tape.bars_1d["event_time"].unique())
         assert metrics["trade_count"] > 0
         assert metrics["fees"] > 0.0
@@ -63,14 +64,16 @@ def test_wallet_equity_identities_hold(result):
     assert out["scanner_max_abs_diff"] >= 0.0
 
 
-def test_trial_log_gets_two_chained_records(result):
+def test_trial_log_gets_three_chained_records(result):
     out, path = result
-    assert len(out["trial_hashes"]) == 2
+    assert len(out["trial_hashes"]) == 3
     lines = [json.loads(line) for line in path.read_text().splitlines()]
-    assert [line["variant"] for line in lines] == ["main", "constant_notional"]
+    assert [line["variant"] for line in lines] == ["main", "constant_notional", "turnover"]
     assert {line["kind"] for line in lines} == {"SYNTHETIC"}
     assert verify_chain(path)
     assert lines[1]["prev_hash"] == lines[0]["hash"]
+    assert lines[2]["prev_hash"] == lines[1]["hash"]
+    assert [line.get("diagnostic", False) for line in lines] == [False, True, True]
     assert all(line["params_hash"] == out["params_hash"] for line in lines)
     assert all(line["dataset_hash"] == out["dataset_hash"] for line in lines)
     assert all(line["git_head"] for line in lines)
@@ -114,7 +117,7 @@ def test_cli_writes_result_json(tape, tmp_path, monkeypatch):
     main(["--synthetic-seed", "3", "--params", str(params_path), "--out", str(out)])
     written = json.loads((out / "result.json").read_text())
     assert written["kind"] == "SYNTHETIC"
-    assert set(written["metrics"]) == {"main", "constant_notional"}
+    assert set(written["metrics"]) == {"main", "constant_notional", "turnover"}
 
 
 @pytest.mark.parametrize("latency", ["0s", "-1s", "NaT"])
