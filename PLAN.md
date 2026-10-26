@@ -534,7 +534,7 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
   - **PENDING / BLOCKED:** dsr_trial_effective_n, dsr_trial_sharpe_variance, bootstrap_block_rule → required args, no defaults.
   - **Out of scope:** Picking N_eff or block length; reading DEV results to set them.
   - **Depends on:** T4.3 [#24](https://github.com/ddawnlll/tycho/issues/24)
-- [ ] **T5.3** Subperiod split (BTC 200d MA as-of) + per-MA component check — [#30](https://github.com/ddawnlll/tycho/issues/30)
+- [x] **T5.3** Subperiod split (BTC 200d MA as-of) + per-MA component check — [#30](https://github.com/ddawnlll/tycho/issues/30), commits `75cc93a`, `e464ede`, `7bdd8a7`; independent coordinator PASS, closed-bar follow-up #56 included. Integrated acceptance 11 passed; full suite 282 passed.
   - **Goal:** Inputs for pass criteria 4 and 5: each MA period alone positive net of costs; positive net in both BTC-up and BTC-down subperiods.
   - **Read in the monograph:**
     - §14 `#e001` → rows "Alt dönemler", "Başarı ölçütleri" 4–5
