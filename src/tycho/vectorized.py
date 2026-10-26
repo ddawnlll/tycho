@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from .factors import _ANNUALIZATION_DAYS, _ewma, _returns, _validate
-from .marketstate import _utc
+from .marketstate import _daily_close_before, _utc
 from .portfolio import target_weights
 from .tape import _visible
 
@@ -45,8 +45,9 @@ def trend_panels(tape, ma_periods, ewma_convention, *, decision_lag) -> dict:
         bars = bars[bars["event_time"] < as_of].sort_values(
             ["instrument_id", "event_time"], kind="stable"
         )
+        expected_close = _daily_close_before(as_of)
         for iid, group in bars.groupby("instrument_id", sort=False):
-            current = group[group["event_time"] == date]
+            current = group[group["event_time"] == expected_close]
             if current.empty:
                 continue
             closes = group["close"]

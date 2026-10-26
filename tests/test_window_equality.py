@@ -274,18 +274,57 @@ def test_nan_ma_windows_match_snapshot_and_recover(controlled_tape, nan_position
         assert pd.isna(got["score"].at[date, iid])
 
 
-def test_delayed_close_is_not_visible_before_availability(controlled_tape):
-    tape = controlled_tape
-    bars = tape.bars_1d.copy()
+@pytest.mark.parametrize("lag", [CLOSE_LAG, pd.Timedelta("1h")])
+def test_delayed_close_matches_snapshot_and_recovers(lag):
+    tape = make_synthetic_tape(seed=43, n_perps=1, days=420)
+    bars = tape.bars_1d.query("revision == 0").copy().reset_index(drop=True)
+    bars["close"] = 100.0 + np.arange(len(bars))
     date = bars["event_time"].iloc[-2]
     iid = bars["instrument_id"].iloc[0]
-    bars.loc[bars["event_time"] == date, "available_at"] = date + pd.Timedelta(hours=1)
+    publication = date + pd.Timedelta("1h")
+    bars.loc[bars["event_time"] == date, ["available_at", "received_at"]] = publication
     delayed = dataclasses.replace(tape, bars_1d=bars)
-    early = trend_panels(delayed, MA_PERIODS, CONVENTION, decision_lag=CLOSE_LAG)
-    on_time = trend_panels(delayed, MA_PERIODS, CONVENTION, decision_lag="1h")
-    assert pd.isna(early["close"].at[date, iid])
-    assert pd.isna(early["score"].at[date, iid])
-    assert on_time["close"].at[date, iid] == bars["close"].iloc[-2]
+    provider = MarketStateProvider(delayed, universe_size=N, min_history_days=260)
+    panels = trend_panels(delayed, MA_PERIODS, CONVENTION, decision_lag=lag)
+    # Only size the two decisions under test; the panel still uses full history.
+    panels = {name: values.loc[date:] for name, values in panels.items()}
+    members = universe_panel(provider, panels["as_of"])
+    members.index = panels["score"].index
+    rows = weights_panel(
+        panels, members, _cov_fn(delayed, CONVENTION),
+        TARGET_VOL, RHO, N, VOL_CAP, GROSS_CAP, on_abstain="flat",
+    )
+    for close in panels["score"].index:
+        as_of = close + lag
+        signals, snapshot, frame = snapshot_path(provider, 260, as_of)
+        signal = signals[0]
+        ready = as_of >= publication
+        assert snapshot.availability.at[iid, "n_bars"] == 260
+        assert not snapshot.availability.at[iid, "stale"]
+        assert bool(snapshot.availability.at[iid, "missing"]) is not ready
+        assert (snapshot.bars["event_time"] < as_of).all()
+        if ready:
+            assert signal.direction == "LONG"
+            assert panels["score"].at[close, iid] == signal.score == 1.0
+            assert panels["close"].at[close, iid] == bars.set_index("event_time").at[close, "close"]
+            assert rows.at[close, iid] > 0.0
+        else:
+            assert signal.direction == "ABSTAIN"
+            assert signal.score is None
+            assert signal.abstain_reason == "missing_data"
+            assert pd.isna(panels["close"].at[close, iid])
+            assert pd.isna(panels["score"].at[close, iid])
+            assert rows.at[close, iid] == 0.0
+        scores = pd.Series({iid: signal.score}, dtype=float)
+        vols = frame.values["ewma_vol_60d"]
+        active = [iid] if ready else []
+        expected, _ = target_weights(
+            scores, vols, ewma_cov(snapshot, active, CONVENTION),
+            TARGET_VOL, RHO, N, VOL_CAP, GROSS_CAP, on_abstain="flat",
+        )
+        np.testing.assert_allclose(
+            rows.loc[close], expected, rtol=ewma_tolerance(260), atol=0.0,
+        )
 
 
 @pytest.mark.parametrize("lag", [None, "0s", "-1min", "2D"])
