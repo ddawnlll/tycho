@@ -92,6 +92,7 @@ def test_components_execute_pipeline_and_log_each_actual_trial(tmp_path, monkeyp
     tape = make_synthetic_tape(seed=3, n_perps=2, days=350)
     # Synthetic fixture values only; all research PENDING values remain untouched.
     params = {
+        "on_abstain": "flat", "decision_lag": "1min",
         "ewma_convention": {"kind": "span", "value": 60, "returns": "log", "min_periods": 20},
         "max_staleness": "2D", "absolute_band_nav": 0.01,
         "partial_ratio": 1.0, "research_nominal_usd": 1_000_000.0,
@@ -100,9 +101,9 @@ def test_components_execute_pipeline_and_log_each_actual_trial(tmp_path, monkeyp
     periods_seen = []
     original = e001.trend_panels
 
-    def observe(tape, periods, convention):
+    def observe(tape, periods, convention, *, decision_lag):
         periods_seen.append(periods)
-        return original(tape, periods, convention)
+        return original(tape, periods, convention, decision_lag=decision_lag)
 
     monkeypatch.setattr(e001, "trend_panels", observe)
     result = run_components(tape, params, synthetic=True)
