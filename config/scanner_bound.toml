@@ -1,0 +1,4 @@
+# D-41: cost-bearing scanner check is max over days of
+# |scanner_equity - ledger_equity| / ledger_equity <= max_relative_equity_diff.
+# Committed before the first cost-bearing scanner comparison; never changed after.
+max_relative_equity_diff = 0.0001
