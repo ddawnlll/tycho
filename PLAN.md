@@ -674,7 +674,8 @@ Blind reference ledger, scanner↔reference↔ledger parity, full vs windowed re
   - **PENDING / BLOCKED:** Window length is a test parameter (X3.a).
   - **Out of scope:** Modal parallelism.
   - **Depends on:** T4.3 [#24](https://github.com/ddawnlll/tycho/issues/24)
-- [ ] **V6** M6 verifier (reference parity, replay) — [#37](https://github.com/ddawnlll/tycho/issues/37) · verifier
+- [x] **V6** M6 verifier (reference parity, replay) — [#37](https://github.com/ddawnlll/tycho/issues/37) · verifier  
+  Fresh-context PASS at `0cff675`: full suite `420 passed in 252.55s`; reference parity `57 passed`; replay `31 passed`. Reference imports only stdlib, goldens pass unmodified, frozen parity byte-identical, four seeded faults rejected, D-41 bound binding under tightening/cost-shock probes, provenance sequence true. Residuals: D-41 immutability is value-level (comment edit changed file hash), “exact” parity means within preregistered USDT tolerances, blindness is artifact-evidenced not provable from git. A later M4-only config-validation change is covered by the final V7 run.
   - **Goal:** Confirm the reference ledger is truly independent and parity tolerances were fixed before the first run.
   - **Read in the monograph:**
     - §11 Parity / Bağımsızlık rows
