@@ -196,8 +196,9 @@ def test_manifest_params_hash_stable():
     assert first.manifest.params_hash == canonical_hash({"ma_periods": MA_PERIODS})
     assert first.manifest.params_hash == second.manifest.params_hash
     assert first.manifest.params_hash != other.manifest.params_hash
-    assert first.manifest.id == "EXP-TREND-E001"
+    assert first.manifest.expert_id == "EXP-TREND-E001"
     assert first.manifest.semantic_version == "1.0-draft"
+    assert first.manifest.snapshot_schema == "1"
     assert first.manifest.research_status == "DRAFT"
     assert first.manifest.sleeve == "T"
     assert first.manifest.universe_contract == UNIVERSE

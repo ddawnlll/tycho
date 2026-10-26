@@ -11,6 +11,8 @@ from .marketstate import UNIVERSE_ID
 from .runtime import make_manifest
 
 EXPERT_ID = "EXP-TREND-E001"
+# Label for the SnapshotRef field layout in contracts.py (not a research parameter).
+SNAPSHOT_SCHEMA = "1"
 _FACTORS = ("ma_20", "ma_50", "ma_100", "ma_200", "ewma_vol_60d")
 _CROSS_SECTION = ("listing_state", "contract_spec", "trailing_30d_liquidity")
 _SOURCE = Path(__file__).read_text()
@@ -24,8 +26,9 @@ class TrendExpert:
         self.manifest = make_manifest(
             _SOURCE,
             self.params,
-            id=EXPERT_ID,
+            expert_id=EXPERT_ID,
             semantic_version="1.0-draft",
+            snapshot_schema=SNAPSHOT_SCHEMA,
             owner="research",
             sleeve="T",
             research_status="DRAFT",

@@ -100,10 +100,11 @@ class FactorFrame:
 
 @dataclass(frozen=True)
 class ExpertManifest:
-    id: str
+    expert_id: str
     semantic_version: str
     code_hash: str
     params_hash: str
+    snapshot_schema: str
     owner: str
     sleeve: str
     research_status: str
@@ -123,10 +124,11 @@ class ExpertManifest:
     def manifest_hash(self) -> str:
         return canonical_hash(
             {
-                "id": self.id,
+                "expert_id": self.expert_id,
                 "semantic_version": self.semantic_version,
                 "code_hash": self.code_hash,
                 "params_hash": self.params_hash,
+                "snapshot_schema": self.snapshot_schema,
                 "owner": self.owner,
                 "sleeve": self.sleeve,
                 "research_status": self.research_status,
