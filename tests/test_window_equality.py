@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from tycho.contracts import SnapshotRef
+from tycho.e001 import _cov_fn
 from tycho.exp_trend import TrendExpert
 from tycho.factors import compute_factors, ewma_cov
 from tycho.marketstate import MarketStateProvider
@@ -68,12 +69,14 @@ def provider(tape):
 
 @pytest.fixture(scope="module")
 def panels(tape):
-    return trend_panels(tape, MA_PERIODS, CONVENTION)
+    return trend_panels(tape, MA_PERIODS, CONVENTION, decision_lag=CLOSE_LAG)
 
 
 @pytest.fixture(scope="module")
 def universe(provider, panels):
-    return universe_panel(provider, panels["score"].index)
+    members = universe_panel(provider, panels["as_of"])
+    members.index = panels["score"].index
+    return members
 
 
 def factor_fn(snapshot):
@@ -130,18 +133,25 @@ def test_score_and_vol_rows_match_full_history(provider, panels, window):
     assert checked >= 3  # the synthetic tape must exercise the comparison
 
 
-@pytest.mark.parametrize("window", WINDOWS)
-def test_weights_rows_match_snapshot_path(tape, provider, panels, universe, window):
-    rows = weights_panel(
+@pytest.fixture(scope="module", params=[VOL_CAP, 0.001])
+def weight_rows(tape, panels, universe, request):
+    vol_cap = request.param
+    return vol_cap, weights_panel(
         panels,
         universe,
         lambda date, active: full_history_cov(tape, date, active),
         TARGET_VOL,
         RHO,
         N,
-        VOL_CAP,
+        vol_cap,
         GROSS_CAP,
+        on_abstain="flat",  # explicit synthetic policy, not a monograph default
     )
+
+
+@pytest.mark.parametrize("window", WINDOWS)
+def test_weights_rows_match_snapshot_path(provider, window, weight_rows):
+    vol_cap, rows = weight_rows
     checked = 0
     for close in CLOSES:
         as_of = close + CLOSE_LAG
@@ -152,16 +162,20 @@ def test_weights_rows_match_snapshot_path(tape, provider, panels, universe, wind
         )  # ABSTAIN is None -> NaN
         vols = frame.values["ewma_vol_60d"].reindex(iids)
         active = list(scores.index[scores.notna() & vols.notna() & (vols > 0)])
-        expected, _ = target_weights(
+        expected, diag = target_weights(
             scores,
             vols,
             ewma_cov(snapshot, active, CONVENTION),
             TARGET_VOL,
             RHO,
             N,
-            VOL_CAP,
+            vol_cap,
             GROSS_CAP,
+            on_abstain="flat",
         )
+        if vol_cap == 0.001:
+            assert diag["cap"] == "vol_cap"
+            assert diag["forecast_vol"] * diag["s"] == pytest.approx(vol_cap * TARGET_VOL)
         got = rows.loc[close].reindex(iids).fillna(0.0)
         assert (expected != 0.0).any()  # all-zero rows would make the equality vacuous
         np.testing.assert_allclose(
@@ -185,3 +199,96 @@ def test_window_too_short_abstains_instead_of_reweighting(provider, panels):
     # abstain comes from the short window and not from the data
     members = universe_panel(provider, [close]).loc[close]
     assert panels["score"].loc[close, members[members].index].notna().any()
+
+
+@pytest.fixture
+def controlled_tape():
+    tape = make_synthetic_tape(seed=17, n_perps=1, days=240)
+    bars = tape.bars_1d.query("revision == 0").copy().reset_index(drop=True)
+    bars["close"] = 100.0 + np.arange(len(bars))
+    return dataclasses.replace(tape, bars_1d=bars)
+
+
+def test_late_revision_changes_only_decisions_that_can_see_it(controlled_tape):
+    tape = controlled_tape
+    bars = tape.bars_1d
+    dates = pd.DatetimeIndex(bars["event_time"])
+    iid = bars["instrument_id"].iloc[0]
+    revision = bars.iloc[[210]].copy()
+    revision["revision"] = 1
+    revision["close"] = 100_000.0
+    revision["available_at"] = dates[220] + CLOSE_LAG
+    revision["received_at"] = revision["available_at"]
+    revised = dataclasses.replace(tape, bars_1d=pd.concat([bars, revision], ignore_index=True))
+    original = trend_panels(tape, MA_PERIODS, CONVENTION, decision_lag=CLOSE_LAG)
+    got = trend_panels(revised, MA_PERIODS, CONVENTION, decision_lag=CLOSE_LAG)
+    before, after = dates[219], dates[220]
+    for name in ("close", "score", "vol"):
+        pd.testing.assert_frame_equal(got[name].loc[:before], original[name].loc[:before])
+    assert got["score"].at[after, iid] != original["score"].at[after, iid]
+    assert got["vol"].at[after, iid] != original["vol"].at[after, iid]
+    for date in (before, after):
+        as_of = date + CLOSE_LAG
+        snapshot = SnapshotRef(
+            "pit", as_of, "", "", "", (iid,), revised.as_of(as_of).bars_1d,
+            pd.DataFrame({"missing": [False]}, index=[iid]),
+        )
+        frame = factor_fn(snapshot)
+        signal = TrendExpert(MA_PERIODS, MAX_STALENESS).signal(snapshot, frame)[0]
+        assert got["score"].at[date, iid] == signal.score
+        assert got["vol"].at[date, iid] == pytest.approx(frame.values.at[iid, "ewma_vol_60d"])
+        pd.testing.assert_frame_equal(
+            _cov_fn(revised, CONVENTION)(as_of, [iid]), ewma_cov(snapshot, [iid], CONVENTION)
+        )
+    # The runner's covariance must also remain byte-identical before publication.
+    pd.testing.assert_frame_equal(
+        _cov_fn(revised, CONVENTION)(before + CLOSE_LAG, [iid]),
+        _cov_fn(tape, CONVENTION)(before + CLOSE_LAG, [iid]),
+    )
+
+
+@pytest.mark.parametrize("nan_position", [-1, -10, -25])
+def test_nan_ma_windows_match_snapshot_and_recover(controlled_tape, nan_position):
+    tape = controlled_tape
+    bars = tape.bars_1d.copy()
+    # Leave a later clean row to verify that an expired gap does not poison MA20.
+    bars.loc[len(bars) - 1 + nan_position, "close"] = np.nan
+    tape = dataclasses.replace(tape, bars_1d=bars)
+    got = trend_panels(tape, MA_PERIODS, CONVENTION, decision_lag=CLOSE_LAG)
+    iid = bars["instrument_id"].iloc[0]
+    for date in bars["event_time"].tail(2):
+        as_of = date + CLOSE_LAG
+        snapshot = SnapshotRef(
+            "nan", as_of, "", "", "", (iid,), tape.as_of(as_of).bars_1d,
+            pd.DataFrame({"missing": [False]}, index=[iid]),
+        )
+        frame = factor_fn(snapshot)
+        closes = snapshot.bars["close"]
+        for k in MA_PERIODS:
+            expected = closes.rolling(k).mean().iloc[-1]
+            assert frame.values.at[iid, f"ma_{k}"] == pytest.approx(expected, nan_ok=True)
+        signal = TrendExpert(MA_PERIODS, MAX_STALENESS).signal(snapshot, frame)[0]
+        assert signal.direction == "ABSTAIN"
+        expected_reason = "nan_close" if pd.isna(closes.iloc[-1]) else "nan_ma"
+        assert signal.abstain_reason == expected_reason
+        assert pd.isna(got["score"].at[date, iid])
+
+
+def test_delayed_close_is_not_visible_before_availability(controlled_tape):
+    tape = controlled_tape
+    bars = tape.bars_1d.copy()
+    date = bars["event_time"].iloc[-2]
+    iid = bars["instrument_id"].iloc[0]
+    bars.loc[bars["event_time"] == date, "available_at"] = date + pd.Timedelta(hours=1)
+    delayed = dataclasses.replace(tape, bars_1d=bars)
+    early = trend_panels(delayed, MA_PERIODS, CONVENTION, decision_lag=CLOSE_LAG)
+    on_time = trend_panels(delayed, MA_PERIODS, CONVENTION, decision_lag="1h")
+    assert pd.isna(early["close"].at[date, iid])
+    assert pd.isna(early["score"].at[date, iid])
+    assert on_time["close"].at[date, iid] == bars["close"].iloc[-2]
+
+
+@pytest.mark.parametrize("lag", [None, "0s", "-1min", "2D"])
+def test_invalid_daily_decision_lag_is_rejected(controlled_tape, lag):
+    with pytest.raises(ValueError, match="decision_lag"):
+        trend_panels(controlled_tape, MA_PERIODS, CONVENTION, decision_lag=lag)

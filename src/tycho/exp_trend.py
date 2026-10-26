@@ -55,8 +55,8 @@ class TrendExpert:
         manifest_hash = self.manifest.manifest_hash()
         closes = (
             snapshot.bars.sort_values(["instrument_id", "event_time"], kind="stable")
-            .groupby("instrument_id")["close"]
-            .last()
+            .groupby("instrument_id").tail(1)
+            .set_index("instrument_id")["close"]
         )
         signals = []
         for instrument_id in snapshot.universe:
