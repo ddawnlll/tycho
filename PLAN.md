@@ -83,6 +83,7 @@ Then follow `docs/dispatch-plan.md`: independent verification before closure, ex
 No Modal execution: skill/PLAN prohibit it and the budget is owner-only; small synthetic checks stay local. Undefined scientific rules remain BLOCKED, never guessed.
 Owner decisions discovered: #45 (zero-crossing policy), #46 (null/baseline preservation rules). Public scanner interface supplied in `docs/scanner-interface.md` for blind-worker request #47.
 Additional blockers: #51 (1h execution tape), #52 (manifest text/registry conflict), #53 (cost-bearing exact scanner parity). V0/V1/V4 fixes: #48/#58, #49, #50. #30 implementation is in PR #54 with closed-bar review fix #56; no unchecked item is marked complete.
+Slot B staging: original tolerance-first commit `26f1d9b` is merged unchanged, independently reviewed and full-suite green. Dispatch explicitly allows #38 after this standalone commit; #35 remains open/BLOCKED (#45/#53), and no general scanner parity is claimed. Install Nautilus only in an exclusive test-free window.
 
 ```text
 M0 T0.5 ─► V0
