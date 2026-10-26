@@ -153,7 +153,8 @@ def test_restart_in_fresh_process_after_durable_checkpoint(tmp_path):
 
 
 @pytest.mark.parametrize("change", [
-    "checksum", "input", "next_day", "watermark", "history", "entry", "nan", "wallet", "orders",
+    "checksum", "input", "next_day", "watermark", "history", "entry", "nan", "wallet",
+    "orders", "turnover_negative", "turnover_key", "traded_weight_negative",
 ])
 def test_invalid_checkpoint_is_refused_before_any_ledger_event(change):
     prep, targets, settings = _case()
@@ -178,6 +179,12 @@ def test_invalid_checkpoint_is_refused_before_any_ledger_event(change):
             state["wallet"] = "1000.0"
         elif change == "orders":
             state["orders"]["UNKNOWN"] = 1.0
+        elif change == "turnover_negative":
+            state["turnover_by_year"] = {"2025": -0.1}
+        elif change == "turnover_key":
+            state["turnover_by_year"] = {"25": 0.1}
+        elif change == "traded_weight_negative":
+            state["traded_weight"] = -0.1
         checkpoint["hash"] = canonical_hash(state)
     with patch.object(e001, "run_ledger") as ledger:
         with pytest.raises(ValueError, match="invalid replay checkpoint"):

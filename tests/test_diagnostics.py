@@ -13,23 +13,31 @@ from tycho.synthetic import make_synthetic_tape
 from tycho.trials import verify_chain
 
 
-@pytest.fixture(scope="module")
-def diagnostics(tmp_path_factory):
+def _diagnostic_tape():
     tape = make_synthetic_tape(seed=3, n_perps=1, days=260)
     # Explicit post-#50 synthetic payment-time fixture: daily funding only, with
     # marks/rates published at their own event time. Not a production fill model.
     tape.funding = tape.funding[tape.funding["event_time"].dt.hour == 0].copy()
     tape.funding["available_at"] = tape.funding["event_time"]
     tape.mark["available_at"] = tape.mark["event_time"]
-    root = tmp_path_factory.mktemp("diagnostics")
-    params = {
+    return tape
+
+
+def _diagnostic_params(nominal=100_000.0):
+    return {
         **PARAMS,
         "universe_size": 4,
         "min_history_days": 30,
         "ma_periods_days": [5, 10],
-        # Keep contract-step products inside the runner's 1e-7 step tolerance.
-        "research_nominal_usd": 100_000.0,
+        "research_nominal_usd": nominal,
     }
+
+
+@pytest.fixture(scope="module")
+def diagnostics(tmp_path_factory):
+    tape = _diagnostic_tape()
+    root = tmp_path_factory.mktemp("diagnostics")
+    params = _diagnostic_params()
     panels = e001.trend_panels(
         tape, params["ma_periods_days"], params["ewma_convention"],
         decision_lag=params["decision_lag"],
@@ -146,6 +154,38 @@ def test_turnover_is_grouped_by_execution_year(turnover_case):
     # JSON-safe output: raw yearly sums of traded weights, no partial-year extrapolation.
     assert "turnover_by_year" in metrics
     assert metrics["turnover_by_year"] == pytest.approx({"2024": 0.5, "2025": 2 / 3})
+
+
+def test_turnover_year_uses_fill_timestamp_with_1d_decision_lag(turnover_case):
+    # Dec 31 decision -> Jan 1 fill; the whole round trip executes in 2025.
+    prep, targets, settings = turnover_case
+    prep["as_of"] = prep["as_of"] + pd.Timedelta("1D")
+    settings = {**settings, "decision_lag": str(pd.Timedelta("1D"))}
+    metrics = e001._simulate(prep, targets, settings)["metrics"]
+    assert metrics["turnover"] == pytest.approx(0.5 + 2 / 3)
+    assert metrics["turnover_by_year"] == pytest.approx({"2025": 0.5 + 2 / 3})
+
+
+def test_large_nominal_exact_step_order_executes(tmp_path):
+    # #69: this scale used to false-reject an exact -1_069_802_886-step order.
+    path = tmp_path / "large-nominal.jsonl"
+    result = e001.run_e001(
+        _diagnostic_tape(),
+        {**_diagnostic_params(1_000_000.0), "target_vol": 0.2, "trials_path": path},
+        synthetic=True,
+    )
+    metrics = result["metrics"]["main"]
+    assert metrics["trade_count"] > 0
+    assert metrics["turnover"] > 0
+    assert sum(metrics["turnover_by_year"].values()) == pytest.approx(metrics["turnover"])
+
+
+def test_off_step_queued_order_is_still_rejected(turnover_case):
+    prep, targets, settings = turnover_case
+    # Day 1 executes the day-0 5-contract order; a step of 3 makes it off-step.
+    prep["instruments"][1] = {"A": Instrument("A", 1, 3.0, 0)}
+    with pytest.raises(ValueError, match="queued order violates executable contract"):
+        e001._simulate(prep, targets, settings)
 
 
 def test_turnover_includes_forced_delist_exit(turnover_case):

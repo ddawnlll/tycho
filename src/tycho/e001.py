@@ -375,10 +375,13 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
                     raise ValueError(f"invalid checkpoint {key}")
             if (any(type(saved[k]) not in (int, float) for k in (
                     "wallet", "identity_error", "fees_total", "funding_total", "traded_weight"))
+                    or saved["traded_weight"] < 0
                     or type(saved["trade_count"]) is not int or saved["trade_count"] < 0
                     or not isinstance(saved["turnover_by_year"], dict)
-                    or any(type(year) is not str or type(value) not in (int, float)
-                           or not np.isfinite(value)
+                    or any(type(year) is not str or len(year) != 4
+                           or not year.isascii() or not year.isdigit()
+                           or type(value) not in (int, float)
+                           or not np.isfinite(value) or value < 0
                            for year, value in saved["turnover_by_year"].items())
                     or any(v <= 0 for v in saved["entry"].values())):
                 raise ValueError("invalid checkpoint accounting values")
@@ -454,8 +457,8 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
                 raise ValueError(f"executable price unavailable: {instrument_id} at {as_of}")
             inst = instruments[instrument_id]
             notional = abs(qty) * inst.contract_multiplier * price
-            steps = qty / inst.step_size
-            if not np.isclose(steps, round(steps), rtol=0, atol=1e-7) or (
+            quantized = round(qty / inst.step_size) * inst.step_size
+            if abs(qty - quantized) > abs(inst.step_size) * 1e-9 or (
                 notional < inst.min_notional and qty != -positions.get(instrument_id, 0.0)
             ):
                 raise ValueError(f"queued order violates executable contract spec: {instrument_id} at {as_of}")
@@ -532,7 +535,7 @@ def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
                     / equity_before
                 )
                 traded_weight += weight
-                year = str(date.year)
+                year = str(as_of.year)
                 turnover_by_year[year] = turnover_by_year.get(year, 0.0) + weight
 
         snapshots = run_ledger(wallet, instruments, events) if events else []
