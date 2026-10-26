@@ -215,6 +215,7 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
 - [x] **T2.3** C-03 expert runtime + manifest hashing, ABSTAIN enforcement — [#14](https://github.com/ddawnlll/tycho/issues/14)  
   Commit 226393d.
   Acceptance: `uv run pytest -q tests/test_expert_runtime.py`
+- [x] **T2.6** — [#52](https://github.com/ddawnlll/tycho/issues/52) D-42 manifest schema: `expert_id` + required `snapshot_schema`, text∪registry union, hash covers all 16 fields. Commit `d06f483`; independent PASS; integrated acceptance 49 passed, full suite 363 passed.
 - [ ] **V2** M2 verifier (MarketState / Factor / Runtime) — [#15](https://github.com/ddawnlll/tycho/issues/15) · verifier
   - **Goal:** No M2 verifier has run. Verify the §08A.8 acceptance table from a clean context before M3 builds on it.
   - **Read in the monograph:**
