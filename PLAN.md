@@ -309,14 +309,14 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
   - **Out of scope:** Choosing a binding window length; editing config.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17)
 - [x] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43), `d829405`; independent Astra PASS for all five findings, integrated acceptance 39 passed / full suite 271 passed.
-- [ ] **T3.5** Delayed-current-bar readiness must agree between panel and snapshot — #61 (new independent V3 finding; ahead of dependent replay work).
+- [x] **T3.5** Delayed-current-bar readiness agrees between panel and snapshot — #61, `dc69dba`; independent Astra PASS, integrated acceptance 78 passed / full suite 285 passed.
   - **Goal:** Close the M3 verifier findings (wf_4bf0a3cb-a4f); the blocker is a point-in-time leak in the vectorized full-history path.
   - **Contract:** (1) blocker: `vectorized.trend_panels` builds from the end-of-tape view, so later revisions leak into earlier rows; (2) cov evaluated one bar before the decision time — add a test where the vol cap binds; (3) NaN latest close must ABSTAIN, not fall back; (4) `on_abstain` required argument, no default; (5) same MA NaN handling in panel and snapshot paths.
   - **Acceptance:** `uv run pytest -q tests/test_window_equality.py tests/test_portfolio.py tests/test_exp_trend.py`
   - **Depends on:** T2.5 [#42](https://github.com/ddawnlll/tycho/issues/42) (shared factors.py)
 - [CANCELLED owner 2026-10-25] **X3.a** Binding live window length: §08 "≥400 bars" vs registry warmup "not universal 400" / lookback 260 — [#19](https://github.com/ddawnlll/tycho/issues/19) · BLOCKED  
   Text/registry conflict → BLOCKED per CLAUDE.md. Owner cancelled the resolution 2026-10-25; T3.3 keeps window length as a test parameter.
-- [ ] **V3** M3 verifier (EXP-TREND-E001 + portfolio) — [#20](https://github.com/ddawnlll/tycho/issues/20) · verifier
+- [x] **V3** M3 verifier (EXP-TREND-E001 + portfolio) — [#20](https://github.com/ddawnlll/tycho/issues/20) · verifier
   - **Goal:** Clean-context verification of the signal and sizing against §08A/§09/§14 before any ledger work uses them.
   - **Read in the monograph:**
     - §08A.3–08A.4, §09 C-02…C-05, §14 Sinyal/Boyutlandırma rows; registry `first_experiment.signal|sizing`
@@ -534,7 +534,7 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
   - **PENDING / BLOCKED:** dsr_trial_effective_n, dsr_trial_sharpe_variance, bootstrap_block_rule → required args, no defaults.
   - **Out of scope:** Picking N_eff or block length; reading DEV results to set them.
   - **Depends on:** T4.3 [#24](https://github.com/ddawnlll/tycho/issues/24)
-- [ ] **T5.3** Subperiod split (BTC 200d MA as-of) + per-MA component check — [#30](https://github.com/ddawnlll/tycho/issues/30)
+- [x] **T5.3** Subperiod split (BTC 200d MA as-of) + per-MA component check — [#30](https://github.com/ddawnlll/tycho/issues/30), commits `75cc93a`, `e464ede`, `7bdd8a7`; independent coordinator PASS, closed-bar follow-up #56 included. Integrated acceptance 11 passed; full suite 282 passed.
   - **Goal:** Inputs for pass criteria 4 and 5: each MA period alone positive net of costs; positive net in both BTC-up and BTC-down subperiods.
   - **Read in the monograph:**
     - §14 `#e001` → rows "Alt dönemler", "Başarı ölçütleri" 4–5
