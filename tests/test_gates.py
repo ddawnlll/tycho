@@ -8,6 +8,13 @@ import pytest
 
 from tycho.gates import evaluate
 
+NULL_REPS = 2000  # config stats.null_reps
+COMPONENT_PERIODS = (20, 50, 100, 200)  # config signal.ma_periods_days
+
+
+def null_sample():
+    return [-0.5 + index / (NULL_REPS - 1) for index in range(NULL_REPS)]
+
 
 def gate_inputs(**overrides):
     payload = {
@@ -15,10 +22,11 @@ def gate_inputs(**overrides):
         "alpha": {"alpha": 0.0005, "p_one_sided": 0.05},
         "strategy_metric": 2.0,
         "null_metrics": {
-            "scramble": [-0.2, 0.0, 0.1, 0.3, 0.5],
-            "random_entry": [-0.1, 0.0, 0.2, 0.4, 0.6],
+            "scramble": null_sample(),
+            "random_entry": null_sample(),
         },
         "component_net_pnl": {20: 1.0, 50: 2.0, 100: 3.0, 200: 4.0},
+        "component_periods": COMPONENT_PERIODS,
         "subperiod_net_pnl": {"up": 1.0, "down": 2.0},
         "holdout_attestation": {
             "owner": "owner-a",
@@ -28,6 +36,7 @@ def gate_inputs(**overrides):
         "dsr_threshold": 0.95,
         "alpha_level": 0.90,
         "null_top_fraction": 0.01,
+        "null_reps": NULL_REPS,
     }
     payload.update(overrides)
     return payload
@@ -64,11 +73,13 @@ def test_thresholds_have_no_defaults_and_are_required():
         "strategy_metric",
         "null_metrics",
         "component_net_pnl",
+        "component_periods",
         "subperiod_net_pnl",
         "holdout_attestation",
         "dsr_threshold",
         "alpha_level",
         "null_top_fraction",
+        "null_reps",
     }
     assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in parameters.values())
     assert all(p.default is inspect.Parameter.empty for p in parameters.values())
@@ -98,11 +109,15 @@ def test_alpha_must_be_strictly_positive_and_significant():
 
 def test_top_one_percent_boundary_is_strict_for_both_nulls():
     equal = {"scramble": [0.0, 1.0], "random_entry": [0.0, 1.0]}
-    at_cutoff = evaluate(**gate_inputs(strategy_metric=0.99, null_metrics=equal))
+    at_cutoff = evaluate(
+        **gate_inputs(strategy_metric=0.99, null_metrics=equal, null_reps=2)
+    )
     assert at_cutoff["verdict"] == "FAIL"
     assert at_cutoff["criteria"]["null_top1"]["status"] == "FAIL"
 
-    above = evaluate(**gate_inputs(strategy_metric=0.990001, null_metrics=equal))
+    above = evaluate(
+        **gate_inputs(strategy_metric=0.990001, null_metrics=equal, null_reps=2)
+    )
     assert above["verdict"] == "PASS"
     assert above["criteria"]["null_top1"]["status"] == "PASS"
 
@@ -124,6 +139,7 @@ def test_both_null_distributions_are_required():
         **gate_inputs(
             strategy_metric=0.1,
             null_metrics={"scramble": [0.0, 1.0], "random_entry": [-1.0, 0.0]},
+            null_reps=2,
         )
     )
     assert below_one["verdict"] == "FAIL"
@@ -146,8 +162,10 @@ def test_missing_input_is_blocked_even_when_other_criteria_pass():
         "strategy_metric",
         "null_metrics",
         "component_net_pnl",
+        "component_periods",
         "subperiod_net_pnl",
         "holdout_attestation",
+        "null_reps",
     ],
 )
 def test_absent_inputs_are_blocked(field):
@@ -174,9 +192,11 @@ def test_missing_nested_input_is_blocked():
         "strategy_metric",
         "null_metrics",
         "component_net_pnl",
+        "component_periods",
         "subperiod_net_pnl",
         "holdout_attestation",
         "alpha_level",
+        "null_reps",
     ],
 )
 def test_pending_input_is_blocked(field):
@@ -221,17 +241,27 @@ def test_invalid_takes_precedence_over_blocked_and_fail():
         ("strategy_metric", float("nan")),
         ("strategy_metric", float("inf")),
         ("strategy_metric", "high"),
-        ("null_metrics", {"scramble": [], "random_entry": [0.0]}),
-        ("null_metrics", {"scramble": [float("nan")], "random_entry": [0.0]}),
-        ("null_metrics", {"scramble": [float("inf")], "random_entry": [0.0]}),
-        ("null_metrics", {"scramble": "x", "random_entry": [0.0]}),
-        ("null_metrics", {"scramble": [0.0], "random_entry": [0.0], "other": [0.0]}),
+        ("null_metrics", {"scramble": [float("nan")] * NULL_REPS, "random_entry": null_sample()}),
+        ("null_metrics", {"scramble": [float("inf")] * NULL_REPS, "random_entry": null_sample()}),
+        (
+            "null_metrics",
+            {"scramble": [0.0] * (NULL_REPS - 1) + ["x"], "random_entry": null_sample()},
+        ),
+        (
+            "null_metrics",
+            {"scramble": null_sample(), "random_entry": null_sample(), "other": [0.0]},
+        ),
         ("component_net_pnl", {}),
         ("component_net_pnl", [(20, 1.0), (20, 2.0)]),
         ("component_net_pnl", {20.0: 1.0}),
         ("component_net_pnl", {-20: 1.0}),
-        ("component_net_pnl", {20: float("nan")}),
-        ("subperiod_net_pnl", {"up": 1.0, "down": 2.0, "flat": 3.0}),
+        ("component_net_pnl", {20: float("nan"), 50: 2.0, 100: 3.0, 200: 4.0}),
+        ("component_net_pnl", {20: 1.0, 50: 2.0, 100: 3.0, 200: 4.0, 300: 9.0}),
+        ("component_periods", (20, 50, 100)),
+        ("component_periods", (20, 20, 100, 200)),
+        ("component_periods", (20.0, 50, 100, 200)),
+        ("subperiod_net_pnl", {"up": 1.0, "down": 2.0, "other": 3.0}),
+        ("subperiod_net_pnl", {"up": {"net_pnl": 1.0, "extra": 2}, "down": 2.0}),
         ("subperiod_net_pnl", {"up": float("nan"), "down": 2.0}),
         ("subperiod_net_pnl", {"up": "x", "down": 2.0}),
         ("holdout_attestation", ["owner-a", True, True]),
@@ -247,6 +277,9 @@ def test_invalid_takes_precedence_over_blocked_and_fail():
         ("alpha_level", 1.0),
         ("null_top_fraction", 0.0),
         ("null_top_fraction", 1.0),
+        ("null_reps", 0),
+        ("null_reps", 1.5),
+        ("null_reps", True),
     ],
 )
 def test_malformed_inputs_are_invalid(field, value):
@@ -265,13 +298,43 @@ def test_holdout_unsigned_is_never_pass_even_with_one_to_five_passing():
     for attestation in (
         None,
         {"owner": "owner-a", "signed": False, "net_sharpe_positive": True},
-        {"owner": "owner-a", "signed": True, "net_sharpe_positive": False},
     ):
         report = evaluate(**gate_inputs(holdout_attestation=attestation))
         assert report["verdict"] == "BLOCKED"
         assert report["criteria"]["holdout"]["status"] == "BLOCKED"
         for name in ("dsr", "alpha", "null_top1", "ma_components", "subperiods"):
             assert report["criteria"][name]["status"] == "PASS"
+
+
+def test_signed_negative_holdout_is_fail_not_blocked():
+    negative = {
+        "owner": "owner-a",
+        "signed": True,
+        "net_sharpe_positive": False,
+    }
+    report = evaluate(**gate_inputs(holdout_attestation=negative))
+    assert report["verdict"] == "FAIL"
+    assert report["criteria"]["holdout"]["status"] == "FAIL"
+    for name in ("dsr", "alpha", "null_top1", "ma_components", "subperiods"):
+        assert report["criteria"][name]["status"] == "PASS"
+
+    # A signed holdout failure stays FAIL even when criteria 1-5 also fail.
+    also_failing = evaluate(**gate_inputs(dsr=0.10, holdout_attestation=negative))
+    assert also_failing["verdict"] == "FAIL"
+    assert also_failing["criteria"]["holdout"]["status"] == "FAIL"
+
+
+@pytest.mark.parametrize("key", ["owner", "signed", "net_sharpe_positive"])
+def test_nested_none_holdout_attestation_is_blocked(key):
+    attestation = {
+        "owner": "owner-a",
+        "signed": True,
+        "net_sharpe_positive": True,
+    }
+    attestation[key] = None
+    report = evaluate(**gate_inputs(holdout_attestation=attestation))
+    assert report["verdict"] == "BLOCKED"
+    assert report["criteria"]["holdout"]["status"] == "BLOCKED"
 
 
 def test_holdout_attested_passes_and_stays_owner():
@@ -287,7 +350,11 @@ def test_holdout_attested_passes_and_stays_owner():
         ("dsr", 0.50, "dsr"),
         ("alpha", {"alpha": 0.0, "p_one_sided": 0.01}, "alpha"),
         ("strategy_metric", -1.0, "null_top1"),
-        ("component_net_pnl", {20: 1.0, 50: 0.0}, "ma_components"),
+        (
+            "component_net_pnl",
+            {20: 1.0, 50: 0.0, 100: 3.0, 200: 4.0},
+            "ma_components",
+        ),
         ("subperiod_net_pnl", {"up": 1.0, "down": -1.0}, "subperiods"),
     ],
 )
@@ -295,6 +362,83 @@ def test_any_fail_among_criteria_one_to_five_is_fail(field, value, criterion):
     report = evaluate(**gate_inputs(**{field: value}))
     assert report["verdict"] == "FAIL"
     assert report["criteria"][criterion]["status"] == "FAIL"
+
+
+@pytest.mark.parametrize(
+    "mapping,expected",
+    [
+        ({20: 1.0}, "BLOCKED"),
+        ({20: 1.0, 50: 2.0}, "BLOCKED"),
+        ({20: 1.0, 50: 2.0, 100: 3.0}, "BLOCKED"),
+        ({20: 1.0, 50: 2.0, 100: 3.0, 200: 4.0, 300: 9.0}, "INVALID"),
+        ({1: 1.0, 2: 2.0, 3: 3.0, 4: 4.0}, "INVALID"),
+    ],
+)
+def test_component_period_set_must_match_config_exactly(mapping, expected):
+    report = evaluate(**gate_inputs(component_net_pnl=mapping))
+    assert report["verdict"] == expected
+    assert report["criteria"]["ma_components"]["status"] == expected
+
+
+def test_single_component_period_never_passes():
+    report = evaluate(
+        **gate_inputs(component_periods=(20,), component_net_pnl={20: 1.0})
+    )
+    assert report["verdict"] == "INVALID"
+    assert report["criteria"]["ma_components"]["status"] == "INVALID"
+
+
+def test_null_sample_length_must_equal_null_reps():
+    short = {"scramble": [0.0, 1.0], "random_entry": [0.0, 1.0]}
+    report = evaluate(**gate_inputs(null_metrics=short))
+    assert report["verdict"] == "BLOCKED"
+    assert report["criteria"]["null_top1"]["status"] == "BLOCKED"
+
+    empty = {"scramble": [], "random_entry": []}
+    report = evaluate(**gate_inputs(null_metrics=empty))
+    assert report["verdict"] == "BLOCKED"
+    assert report["criteria"]["null_top1"]["status"] == "BLOCKED"
+
+    exact = evaluate(**gate_inputs(null_metrics=short, null_reps=2))
+    assert exact["verdict"] == "PASS"
+
+
+def test_alpha_upstream_shape_is_accepted():
+    upstream = {
+        "alpha": 0.0005,
+        "alpha_annualized": 0.1825,
+        "beta": 0.4,
+        "t": 2.2,
+        "p_one_sided": 0.05,
+        "pass_90": True,
+    }
+    report = evaluate(**gate_inputs(alpha=upstream))
+    assert report["verdict"] == "PASS"
+    assert report["criteria"]["alpha"]["status"] == "PASS"
+
+
+def test_subperiod_upstream_shape_is_accepted():
+    upstream = {
+        "up": {"observations": 100, "net_pnl": 1.0},
+        "down": {"observations": 90, "net_pnl": 2.0},
+        "flat": {"observations": 2, "net_pnl": 0.0},
+        "unclassified": {"observations": 0, "net_pnl": None},
+    }
+    report = evaluate(**gate_inputs(subperiod_net_pnl=upstream))
+    assert report["verdict"] == "PASS"
+    assert report["criteria"]["subperiods"]["status"] == "PASS"
+
+
+def test_subperiod_nested_missing_net_pnl_is_blocked():
+    for label in ("up", "down"):
+        upstream = {
+            "up": {"observations": 1, "net_pnl": 1.0},
+            "down": {"observations": 1, "net_pnl": 2.0},
+        }
+        upstream[label]["net_pnl"] = None
+        report = evaluate(**gate_inputs(subperiod_net_pnl=upstream))
+        assert report["verdict"] == "BLOCKED"
+        assert report["criteria"]["subperiods"]["status"] == "BLOCKED"
 
 
 def test_component_pairs_input_is_accepted():

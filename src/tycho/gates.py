@@ -9,9 +9,9 @@ Precedence is fail-closed: INVALID > BLOCKED > FAIL > PASS. Any missing,
 unavailable or ``"PENDING"`` input is BLOCKED. Structurally malformed or
 inconsistent input is INVALID, which is deliberately distinct from BLOCKED.
 
-Criterion 6 is never evaluated by code: it is OWNER only when an explicit owner
-attestation says the sealed holdout was opened and net Sharpe > 0. No holdout
-data is accepted or read here.
+Criterion 6 is never evaluated by code: a positive owner attestation makes it
+OWNER, a signed negative attestation makes it FAIL, and missing/unsigned stays
+BLOCKED. No holdout data is accepted or read here.
 """
 
 import math
@@ -41,32 +41,49 @@ def evaluate(
     strategy_metric,
     null_metrics,
     component_net_pnl,
+    component_periods,
     subperiod_net_pnl,
     holdout_attestation,
     dsr_threshold,
     alpha_level,
     null_top_fraction,
+    null_reps,
 ):
     """Judge the six E-001 criteria as one deterministic, JSON-safe report.
 
-    ``dsr`` is the deflated-Sharpe probability. ``alpha`` is
-    ``{"alpha": float, "p_one_sided": float}`` from ``beta_adjusted_alpha``.
-    ``null_metrics`` is ``{"scramble": [...], "random_entry": [...]}``.
+    ``dsr`` is the deflated-Sharpe probability. ``alpha`` is either the
+    projection ``{"alpha": float, "p_one_sided": float}`` or the full
+    ``stats.beta_adjusted_alpha`` result (``alpha``, ``alpha_annualized``,
+    ``beta``, ``t``, ``p_one_sided``, ``pass_90``); only the two gate fields
+    are read. ``null_metrics`` is
+    ``{"scramble": [...], "random_entry": [...]}`` with exactly ``null_reps``
+    finite samples in each null.
+
     ``component_net_pnl`` maps each MA period to its net P&L (a mapping or a
-    sequence of ``(period, net_pnl)`` pairs). ``subperiod_net_pnl`` is
-    ``{"up": float, "down": float}``. ``alpha_level`` is the one-sided
-    confidence level (0.90 means p < 0.10). ``null_top_fraction`` is 0.01 for
-    the top 1% test.
+    sequence of ``(period, net_pnl)`` pairs). ``component_periods`` is the
+    required config ``signal.ma_periods_days`` set (four distinct positive
+    integers); the component key set must equal it exactly.
+
+    ``subperiod_net_pnl`` accepts either ``{"up": float, "down": float}`` or
+    the full ``subperiods.net_by_subperiod`` result
+    (``up``/``down``/``flat``/``unclassified``, each with ``observations`` and
+    ``net_pnl``); only up/down ``net_pnl`` are criteria and flat/unclassified
+    are ignored. ``alpha_level`` is the one-sided confidence level (0.90 means
+    p < 0.10). ``null_top_fraction`` is 0.01 for the top 1% test.
 
     ``holdout_attestation`` must be
-    ``{"owner": str, "signed": True, "net_sharpe_positive": True}``; anything
-    less is BLOCKED, and malformed structure is INVALID.
+    ``{"owner": str, "signed": bool, "net_sharpe_positive": bool}``. Missing,
+    PENDING or unsigned is BLOCKED; a signed negative attestation is FAIL;
+    malformed structure is INVALID. The attestation is trusted input supplied
+    by the protected owner/judge layer.
     """
     criteria = {
         "dsr": _dsr_criterion(dsr, dsr_threshold),
         "alpha": _alpha_criterion(alpha, alpha_level),
-        "null_top1": _null_criterion(strategy_metric, null_metrics, null_top_fraction),
-        "ma_components": _components_criterion(component_net_pnl),
+        "null_top1": _null_criterion(
+            strategy_metric, null_metrics, null_reps, null_top_fraction
+        ),
+        "ma_components": _components_criterion(component_net_pnl, component_periods),
         "subperiods": _subperiods_criterion(subperiod_net_pnl),
         "holdout": _holdout_criterion(holdout_attestation),
     }
@@ -139,6 +156,16 @@ def _threshold(value, name, low, high, inclusive=False):
     return value
 
 
+def _positive_int(value, name):
+    if value is None or _is_pending(value):
+        _reject(BLOCKED, f"{name} is missing/PENDING")
+    if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+        _reject(INVALID, f"{name} must be an integer")
+    if int(value) < 1:
+        _reject(INVALID, f"{name} must be >= 1")
+    return int(value)
+
+
 def _mapping(value, name, allowed):
     if value is None or _is_pending(value):
         _reject(BLOCKED, f"{name} is missing/PENDING")
@@ -163,8 +190,26 @@ def _distribution(value, name):
         _reject(INVALID, f"{name} must be a sequence of numbers")
     values = list(value)
     if not values:
-        _reject(INVALID, f"{name} is empty")
+        _reject(BLOCKED, f"{name} is empty")
     return [_num(item, f"{name} value") for item in values]
+
+
+def _expected_periods(value):
+    if value is None or _is_pending(value):
+        _reject(BLOCKED, "component_periods is missing/PENDING")
+    if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Iterable):
+        _reject(INVALID, "component_periods must be a sequence of periods")
+    periods = list(value)
+    if len(periods) != 4:
+        _reject(INVALID, "component_periods must contain the four MA periods")
+    seen = set()
+    for period in periods:
+        if type(period) is not int or period <= 0:
+            _reject(INVALID, "component_periods must be positive integers")
+        if period in seen:
+            _reject(INVALID, f"component_periods has a duplicate period: {period}")
+        seen.add(period)
+    return seen
 
 
 def _pairs(value, name):
@@ -208,7 +253,11 @@ def _dsr_criterion(dsr, threshold):
 def _alpha_criterion(alpha, level):
     try:
         confidence = _threshold(level, "alpha_level", 0.0, 1.0)
-        values = _mapping(alpha, "alpha", {"alpha", "p_one_sided"})
+        values = _mapping(
+            alpha,
+            "alpha",
+            {"alpha", "alpha_annualized", "beta", "t", "p_one_sided", "pass_90"},
+        )
         point = _num(_entry(values, "alpha", "alpha value"), "alpha value")
         p_value = _num(_entry(values, "p_one_sided", "alpha p_one_sided"), "alpha p_one_sided")
         if not 0.0 <= p_value <= 1.0:
@@ -226,10 +275,11 @@ def _alpha_criterion(alpha, level):
     return _criterion(FAIL, f"p {_fmt(p_value)} is not < {_fmt(cutoff)}")
 
 
-def _null_criterion(metric, null_metrics, fraction):
+def _null_criterion(metric, null_metrics, reps, fraction):
     try:
         strategy = _num(metric, "strategy_metric")
         top = _threshold(fraction, "null_top_fraction", 0.0, 1.0)
+        reps = _positive_int(reps, "null_reps")
         values = _mapping(null_metrics, "null_metrics", {"scramble", "random_entry"})
         samples = {
             "run-scramble": _distribution(
@@ -239,6 +289,12 @@ def _null_criterion(metric, null_metrics, fraction):
                 _entry(values, "random_entry", "random entry null"), "random entry null"
             ),
         }
+        for name, sample in samples.items():
+            if len(sample) != reps:
+                _reject(
+                    BLOCKED,
+                    f"{name} has {len(sample)} samples, expected null_reps={reps}",
+                )
     except _Rejected as exc:
         return _criterion(exc.status, exc.reason)
     cutoffs = {
@@ -261,9 +317,17 @@ def _null_criterion(metric, null_metrics, fraction):
     )
 
 
-def _components_criterion(component_net_pnl):
+def _components_criterion(component_net_pnl, component_periods):
     try:
+        expected = _expected_periods(component_periods)
         items = _pairs(component_net_pnl, "component_net_pnl")
+        supplied = {period for period, _ in items}
+        extra = supplied - expected
+        if extra:
+            _reject(INVALID, f"component_net_pnl has unexpected periods: {sorted(extra)}")
+        missing = expected - supplied
+        if missing:
+            _reject(BLOCKED, f"component_net_pnl is missing periods: {sorted(missing)}")
         values = [
             (period, _num(value, f"MA {period} net PnL")) for period, value in items
         ]
@@ -277,11 +341,19 @@ def _components_criterion(component_net_pnl):
 
 def _subperiods_criterion(subperiod_net_pnl):
     try:
-        values = _mapping(subperiod_net_pnl, "subperiod_net_pnl", {"up", "down"})
-        net = {
-            label: _num(_entry(values, label, f"{label} net PnL"), f"{label} net PnL")
-            for label in ("up", "down")
-        }
+        values = _mapping(
+            subperiod_net_pnl,
+            "subperiod_net_pnl",
+            {"up", "down", "flat", "unclassified"},
+        )
+        net = {}
+        for label in ("up", "down"):
+            item = _entry(values, label, f"{label} net PnL")
+            if isinstance(item, Mapping):
+                # net_by_subperiod wraps each label as {observations, net_pnl}.
+                item = _mapping(item, f"{label} subperiod", {"observations", "net_pnl"})
+                item = _entry(item, "net_pnl", f"{label} net PnL")
+            net[label] = _num(item, f"{label} net PnL")
     except _Rejected as exc:
         return _criterion(exc.status, exc.reason)
     for label in ("up", "down"):
@@ -298,7 +370,7 @@ def _holdout_criterion(attestation):
             {"owner", "signed", "net_sharpe_positive"},
         )
         for key in ("owner", "signed", "net_sharpe_positive"):
-            if key not in values:
+            if key not in values or values[key] is None:
                 _reject(BLOCKED, f"holdout_attestation.{key} is missing")
         if not isinstance(values["owner"], str) or not values["owner"].strip():
             _reject(INVALID, "holdout_attestation.owner must be a non-empty string")
@@ -308,7 +380,7 @@ def _holdout_criterion(attestation):
         if not values["signed"]:
             _reject(BLOCKED, "holdout_attestation is unsigned")
         if not values["net_sharpe_positive"]:
-            _reject(BLOCKED, "holdout_attestation does not attest net Sharpe > 0")
+            _reject(FAIL, "signed holdout attestation reports net Sharpe <= 0")
     except _Rejected as exc:
         return _criterion(exc.status, exc.reason)
     return _criterion(
