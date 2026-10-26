@@ -219,6 +219,16 @@ def test_nautilus_daily_and_total_parity_with_imposed_costs():
     # Supplied funding was posted to the Nautilus account and changes equity.
     assert len(actual["funding_paid"]) == 2
     assert any(amount != 0.0 for _, amount in actual["funding_paid"])
+    # Exact supplied times, and cashflows from Nautilus's own position at that instant:
+    # Jan 3 long 2 x mark 102 x +0.001 -> -0.204; Jan 5 short 1 x mark 101 x -0.0005 -> -0.0505.
+    supplied_times = sorted(
+        _ns(datetime.fromisoformat(event["time"].replace("Z", "+00:00")))
+        for event in funding
+    )
+    assert [timestamp for timestamp, _ in actual["funding_paid"]] == supplied_times
+    assert [amount for _, amount in actual["funding_paid"]] == pytest.approx(
+        [-0.204, -0.0505], abs=1e-12, rel=0
+    )
 
     # Both long and short PnL paths ran.
     assert min(actual["daily_pnl"]) < 0.0
