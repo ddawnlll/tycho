@@ -5,9 +5,10 @@ warm-started ledger whose synthetic opening fills reproduce the previous close's
 positions and average entry prices exactly (zero fee, zero slippage), so the daily
 chain equals one uninterrupted run_ledger over the whole event stream.
 
-shortcut: daily bars only; the fill uses the next bar's open because the first
-executable price after the PENDING latency needs an intraday tape. Upgrade when
-an intraday tape exists.
+Daily OHLC is not an executable-price tape. The opt-in
+SYNTHETIC_PUBLISHED_DAILY_MARK fixture assumes a visible daily mark is executable
+at that day's decision as_of, exactly 1D after the preceding decision. This is
+not a production fill model or the 1h diagnostic; those remain blocked on #51.
 """
 
 import argparse
@@ -25,18 +26,23 @@ from .factors import ewma_cov
 from .ledger import Instrument, rebalance_orders, run_ledger, slippage_bps
 from .marketstate import MarketStateProvider
 from .synthetic import make_synthetic_tape
-from .tape import TABLE_COLUMNS
+from .tape import TABLE_COLUMNS, validate
 from .vectorized import trend_panels, universe_panel, weights_panel
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_TRIALS = _REPO_ROOT / "ledger" / "trials.jsonl"
-_CLOSE_OFFSET = pd.Timedelta(hours=23, minutes=59)
-_WARM_OFFSET = pd.Timedelta(hours=12)
+_DAILY_MARK_FIXTURE = "SYNTHETIC_PUBLISHED_DAILY_MARK"
 
 
 def run_e001(tape, params, synthetic: bool) -> dict:
     """Run the E-001 signal through the authoritative ledger; append one trial per variant."""
     settings = _settings(params, synthetic)
+    if not tape.meta.get("synthetic") or any(
+        not getattr(tape, name)["source"].eq("synthetic").all()
+        for name in TABLE_COLUMNS
+    ):
+        raise ValueError("synthetic execution fixture requires a synthetic tape")
+    validate(tape)
     panels = trend_panels(
         tape, settings["ma_periods_days"], settings["ewma_convention"],
         decision_lag=settings["decision_lag"],
@@ -82,6 +88,7 @@ def run_e001(tape, params, synthetic: bool) -> dict:
                     "kind": "SYNTHETIC",
                     "expert": EXPERT_ID,
                     "variant": variant,
+                    "execution_policy": settings["synthetic_execution_policy"],
                     "params_hash": settings["params_hash"],
                     "git_head": _git_head(),
                     "dataset_hash": _dataset_hash(tape),
@@ -92,6 +99,7 @@ def run_e001(tape, params, synthetic: bool) -> dict:
         )
     return {
         "kind": "SYNTHETIC",
+        "execution_policy": settings["synthetic_execution_policy"],
         "params_hash": settings["params_hash"],
         "git_head": records[0]["git_head"],
         "dataset_hash": records[0]["dataset_hash"],
@@ -124,7 +132,17 @@ def _settings(params, synthetic: bool) -> dict:
         return params[key] if key in params else default
 
     universe_size = int(pick("universe_size", cfg["universe"]["size"]))
+    latency = pd.Timedelta(_explicit(params, "executable_latency"))
+    if pd.isna(latency) or latency <= pd.Timedelta(0):
+        raise ValueError("executable_latency must be strictly positive")
+    # shortcut: this labelled fixture supports one daily step only; #51 needs an executable tape.
+    if latency != pd.Timedelta(days=1):
+        raise ValueError("daily fixture supports only 1D executable_latency; executable-price tape/schedule required (#51)")
+    if params.get("synthetic_execution_policy") != _DAILY_MARK_FIXTURE:
+        raise ValueError("daily tape has no executable prices; explicitly opt into the synthetic daily-mark fixture (#51)")
     settings = {
+        "executable_latency": str(latency),
+        "synthetic_execution_policy": _DAILY_MARK_FIXTURE,
         "ewma_convention": _explicit(params, "ewma_convention"),
         "decision_lag": str(pd.Timedelta(_explicit(params, "decision_lag"))),
         "on_abstain": _explicit(params, "on_abstain"),
@@ -174,10 +192,6 @@ def _explicit(params, key):
     return value
 
 
-def _fixed_view(tape):
-    return tape.as_of(tape.bars_1d["available_at"].max())
-
-
 def _cov_fn(tape, convention):
     """EWMA covariance on closed bars and revisions visible at decision as_of."""
 
@@ -203,37 +217,68 @@ def _cov_fn(tape, convention):
 
 
 def _prepare(tape, dates, panels) -> dict:
-    view = _fixed_view(tape)
-    bars = view.bars_1d.sort_values(["instrument_id", "event_time"], kind="stable")
-    adv = bars.groupby("instrument_id", sort=False)["quote_volume"].transform(
-        lambda volume: volume.rolling(30).mean()
-    )
-    bars = bars.assign(adv=adv)
     prep = {
         "dates": dates,
-        "opens": _wide(bars, "open"),
+        "as_of": panels["as_of"],
         "closes": panels["close"],
-        "marks": _wide(view.mark, "mark_price"),
-        "adv": _wide(bars, "adv"),
         "daily_vol": panels["vol"] / np.sqrt(365.0),
-        "instruments": _instruments(view.specs),
-        "funding": _funding_by_day(view.funding, dates),
-        "delists": _delists(view.instruments, dates),
+        "instruments": {}, "funding": {}, "delists": {},
     }
+    marks, adv = {}, {}
+    exact_marks = tape.mark[tape.mark["available_at"] <= tape.mark["event_time"]]
+    exact_marks = exact_marks.sort_values("revision").drop_duplicates(
+        ["instrument_id", "event_time"], keep="last"
+    ).set_index(["instrument_id", "event_time"])["mark_price"].to_dict()
+    for i, date in enumerate(dates):
+        as_of = panels["as_of"].loc[date]
+        view = tape.as_of(as_of)
+        bars = view.bars_1d
+        bars = bars[(bars["event_time"] <= date) & (bars["event_time"] < as_of)]
+        bars = bars.sort_values(["instrument_id", "event_time"], kind="stable")
+        trailing = bars[bars["event_time"] > date - pd.Timedelta(days=30)]
+        adv[date] = trailing.groupby("instrument_id")["quote_volume"].agg(
+            lambda volume: volume.mean() if len(volume) == 30 else np.nan
+        )
+        current_marks = view.mark[view.mark["event_time"] == date]
+        marks[date] = current_marks.set_index("instrument_id")["mark_price"]
+        prep["instruments"][i] = _instruments(view.specs, as_of)
+        prep["delists"][i] = _delists(view.instruments, date)
+        previous = panels["as_of"].iloc[i - 1] if i else date - pd.Timedelta(days=1)
+        funding = view.funding[
+            (view.funding["event_time"] > previous) & (view.funding["event_time"] <= as_of)
+        ]
+        rows = []
+        for row in funding.itertuples():
+            mark = exact_marks.get((row.instrument_id, row.event_time))
+            rows.append((row.event_time, row.instrument_id, float(row.rate), mark, row.available_at))
+        raw = tape.funding[
+            (tape.funding["event_time"] > previous) & (tape.funding["event_time"] <= as_of)
+        ]
+        visible = set(zip(funding["instrument_id"], funding["event_time"]))
+        for row in raw.drop_duplicates(["instrument_id", "event_time"]).itertuples():
+            if (row.instrument_id, row.event_time) not in visible:
+                rows.append((row.event_time, row.instrument_id, None, None, row.available_at))
+        prep["funding"][i] = rows
+    for name, rows in (("marks", marks), ("adv", adv)):
+        prep[name] = pd.DataFrame.from_dict(rows, orient="index").reindex(dates)
     return prep
 
 
-def _wide(frame, column):
-    return (
-        frame.pivot(index="event_time", columns="instrument_id", values=column)
-        .sort_index()
-    )
-
-
-def _instruments(specs):
+def _instruments(specs, as_of):
+    specs = specs[
+        (specs["available_at"] <= as_of) & (specs["event_time"] <= as_of)
+        & (specs["valid_from"] <= as_of)
+    ]
     latest = specs.sort_values(["instrument_id", "valid_from", "revision"]).groupby(
         "instrument_id", sort=False
     ).tail(1)
+    values = latest[["contract_multiplier", "step_size", "min_notional"]].astype(float)
+    if (
+        not np.isfinite(values.to_numpy()).all()
+        or (values[["contract_multiplier", "step_size"]] <= 0).any().any()
+        or (values["min_notional"] < 0).any()
+    ):
+        raise ValueError(f"invalid executable contract spec at {as_of}")
     return {
         row.instrument_id: Instrument(
             row.instrument_id,
@@ -245,40 +290,22 @@ def _instruments(specs):
     }
 
 
-def _funding_by_day(funding, dates):
-    funding = funding.sort_values("event_time")
-    index = np.searchsorted(
-        dates.to_numpy(), funding["event_time"].to_numpy(), side="right"
-    ) - 1
-    keep = (index >= 0) & (index < len(dates))
-    rows = {}
-    for i, row in zip(index[keep], funding[keep].itertuples()):
-        rows.setdefault(int(i), []).append(
-            (pd.Timestamp(row.event_time), row.instrument_id, float(row.rate))
-        )
-    return rows
-
-
-def _delists(instruments, dates):
+def _delists(instruments, date):
     latest = instruments.sort_values(["event_time", "revision"]).groupby(
         "instrument_id", sort=False
     ).tail(1)
-    rows = []
-    for row in latest.itertuples():
-        if pd.isna(row.last_trade_day):
-            continue
-        position = dates.get_indexer([pd.Timestamp(row.last_trade_day)])[0]
-        if position >= 0:
-            rows.append((int(position), row.instrument_id))
-    return rows
+    return {
+        row.instrument_id: pd.Timestamp(row.last_trade_day)
+        for row in latest.itertuples()
+        if not pd.isna(row.last_trade_day) and row.last_trade_day <= date
+    }
 
 
 def _simulate(prep, targets, settings) -> dict:
     dates = prep["dates"]
-    instruments = prep["instruments"]
     nominal = settings["research_nominal_usd"]
     wallet = nominal
-    positions, entry, last_mark = {}, {}, {}
+    positions, entry = {}, {}
     orders = {}
     equity_series = [nominal]
     identity_error = 0.0
@@ -287,78 +314,107 @@ def _simulate(prep, targets, settings) -> dict:
     weights_rows, cost_rows, rate_rows = [], [], []
 
     for i, date in enumerate(dates):
+        as_of = prep["as_of"].loc[date]
+        instruments = prep["instruments"][i]
+        for instrument_id in positions.keys() | orders.keys():
+            if instrument_id not in instruments:
+                raise ValueError(f"missing executable contract spec: {instrument_id} at {as_of}")
+            previous_inst = prep["instruments"][i - 1][instrument_id]
+            if instruments[instrument_id].contract_multiplier != previous_inst.contract_multiplier:
+                raise ValueError("contract multiplier changed with exposure or a queued order; migration policy required")
         events = []
         # Recreate the previous close's book: a zero-cost fill at the average
         # entry price restores qty and entry exactly.
         for instrument_id, qty in positions.items():
             events.append(
-                _fill(date - _WARM_OFFSET, instrument_id, qty, entry[instrument_id])
+                _fill(prep["as_of"].iloc[i - 1], instrument_id, qty, entry[instrument_id])
             )
-        for timestamp, instrument_id, rate in prep["funding"].get(i, []):
-            price = last_mark.get(instrument_id)
-            if price is None:
-                price = _value(prep["closes"], dates[i - 1], instrument_id) if i else None
+        for timestamp, instrument_id, rate, price, available_at in prep["funding"].get(i, []):
+            if not positions.get(instrument_id):
+                continue
+            if rate is None or available_at > timestamp:
+                raise ValueError(f"funding unavailable at payment time: {instrument_id} at {timestamp}")
+            if price is None or not np.isfinite(price) or price <= 0:
+                raise ValueError(f"funding mark unavailable: {instrument_id} at {timestamp}")
             events.append(_funding(timestamp, instrument_id, rate, price))
         costs, rates = {}, {}
         for instrument_id, qty in orders.items():
-            price = _value(prep["opens"], date, instrument_id)
-            if price is None:
-                continue
+            eligible = prep["as_of"].iloc[i - 1] + pd.Timedelta(settings["executable_latency"])
+            if as_of != eligible:
+                raise ValueError("daily-mark fixture requires an executable price exactly after executable_latency")
+            # Explicit synthetic fixture only: the published daily mark is executable.
+            price = _value(prep["marks"], date, instrument_id)
+            if price is None or price <= 0:
+                raise ValueError(f"executable price unavailable: {instrument_id} at {as_of}")
             inst = instruments[instrument_id]
             notional = abs(qty) * inst.contract_multiplier * price
+            steps = qty / inst.step_size
+            if not np.isclose(steps, round(steps), rtol=0, atol=1e-7) or (
+                notional < inst.min_notional and qty != -positions.get(instrument_id, 0.0)
+            ):
+                raise ValueError(f"queued order violates executable contract spec: {instrument_id} at {as_of}")
             decision = dates[i - 1]
-            daily_vol = _value(prep["daily_vol"], decision, instrument_id) or 0.0
+            daily_vol = _value(prep["daily_vol"], decision, instrument_id)
             adv = _value(prep["adv"], decision, instrument_id)
-            slip = (
-                slippage_bps(
-                    notional,
-                    daily_vol,
-                    adv,
-                    y=settings["slippage_y"],
-                    min_bps=settings["slippage_min_bps"],
-                )
-                if adv and adv > 0.0
-                else settings["slippage_min_bps"]
+            if adv is None or adv <= 0 or daily_vol is None or daily_vol <= 0:
+                raise ValueError(f"PIT execution cost inputs unavailable: {instrument_id} at {decision}")
+            slip = slippage_bps(
+                notional,
+                daily_vol,
+                adv,
+                y=settings["slippage_y"],
+                min_bps=settings["slippage_min_bps"],
             )
             events.append(
-                _fill(date, instrument_id, qty, price, settings["taker_fee"], slip)
+                _fill(as_of, instrument_id, qty, price, settings["taker_fee"], slip)
             )
             traded_notional += notional
             trade_count += 1
             costs[instrument_id] = settings["taker_fee"] + slip / 1e4
-        for day, instrument_id in prep["delists"]:
-            if day != i:
+        delists = prep["delists"][i]
+        for instrument_id, last_trade_day in delists.items():
+            if not positions.get(instrument_id) and instrument_id not in orders:
                 continue
+            if last_trade_day < date:
+                raise ValueError(f"delist published after liquidation day: {instrument_id}; owner policy required")
+            if instrument_id in orders:
+                raise ValueError(f"queued order overlaps delist: {instrument_id}; owner policy required")
             mark = _value(prep["marks"], date, instrument_id)
-            if mark is None:
-                mark = last_mark.get(instrument_id)
-            if mark is not None:
-                events.append(
-                    {
-                        "time": (date + _CLOSE_OFFSET).isoformat(),
-                        "type": "DELIST",
-                        "instrument_id": instrument_id,
-                        "mark_price": mark,
-                        # E-001 delist rule = mark + 50 bps plus the taker fee
-                        "fee_rate": settings["taker_fee"],
-                        "slippage_bps": settings["delist_exit_slippage_bps"],
-                    }
-                )
+            if mark is None or mark <= 0:
+                raise ValueError(f"delist liquidation mark unavailable: {instrument_id} at {as_of}")
+            events.append(
+                {
+                    "time": as_of.isoformat(),
+                    "type": "DELIST",
+                    "instrument_id": instrument_id,
+                    "mark_price": mark,
+                    # E-001 delist rule = mark + 50 bps plus the taker fee
+                    "fee_rate": settings["taker_fee"],
+                    "slippage_bps": settings["delist_exit_slippage_bps"],
+                }
+            )
         close_marks = {}
         for instrument_id in prep["marks"].columns:
             mark = _value(prep["marks"], date, instrument_id)
             if mark is not None:
+                if mark <= 0:
+                    raise ValueError(f"invalid mark: {instrument_id} at {as_of}")
                 close_marks[instrument_id] = mark
                 events.append(
                     {
-                        "time": (date + _CLOSE_OFFSET).isoformat(),
+                        "time": as_of.isoformat(),
                         "type": "MARK",
                         "instrument_id": instrument_id,
                         "mark_price": mark,
                     }
                 )
-        for timestamp, instrument_id, rate in prep["funding"].get(i, []):
-            rates[instrument_id] = rates.get(instrument_id, 0.0) + rate
+        for timestamp, instrument_id, rate, _, _ in prep["funding"].get(i, []):
+            if rate is not None:
+                rates[instrument_id] = rates.get(instrument_id, 0.0) + rate
+        for instrument_id in positions:
+            if positions[instrument_id] + orders.get(instrument_id, 0.0) != 0 and instrument_id not in delists:
+                if instrument_id not in close_marks:
+                    raise ValueError(f"valuation mark unavailable: {instrument_id} at {as_of}")
 
         opening_wallet = wallet
         snapshots = run_ledger(wallet, instruments, events) if events else []
@@ -370,14 +426,11 @@ def _simulate(prep, targets, settings) -> dict:
             fees_total += last["fees_cum"]
             funding_total += last["funding_cum"]
             equity = last["equity"]
-            # Ledger identities, plus a cross-check against the marks the runner
-            # emitted: a missing close MARK would break the rebuilt equity.
-            marks_now = {**last_mark, **close_marks}
+            # Rebuild from this day's visible marks, never a stale/entry fallback.
             rebuilt = wallet + sum(
                 qty
                 * instruments[instrument_id].contract_multiplier
-                * (marks_now.get(instrument_id, entry[instrument_id])
-                   - entry[instrument_id])
+                * (close_marks[instrument_id] - entry[instrument_id])
                 for instrument_id, qty in positions.items()
             )
             identity_error = max(
@@ -392,13 +445,12 @@ def _simulate(prep, targets, settings) -> dict:
             )
         else:
             equity = wallet
-        last_mark.update(close_marks)
         equity_series.append(equity)
         weights_rows.append(
             {
                 instrument_id: qty
                 * instruments[instrument_id].contract_multiplier
-                * (last_mark.get(instrument_id, entry[instrument_id]))
+                * close_marks[instrument_id]
                 / equity
                 for instrument_id, qty in positions.items()
             }
@@ -407,13 +459,15 @@ def _simulate(prep, targets, settings) -> dict:
         rate_rows.append(rates)
 
         if i + 1 < len(dates):
-            # the ledger marks a FILL at its price, so entry is the fallback mark
-            marks = {k: entry[k] for k in positions}
-            marks.update(last_mark)
-            marks.update(close_marks)
+            marks = close_marks
             target = {}
             for instrument_id, weight in targets.loc[date].items():
-                # no mark at today's close means the instrument stopped trading
+                if float(weight) != 0 and instrument_id not in instruments:
+                    raise ValueError(f"missing decision contract spec: {instrument_id} at {as_of}")
+                if instrument_id in delists:
+                    continue
+                if float(weight) != 0 and instrument_id not in close_marks:
+                    raise ValueError(f"decision mark unavailable: {instrument_id} at {as_of}")
                 if instrument_id in instruments and instrument_id in close_marks:
                     target[instrument_id] = float(weight)
             orders = rebalance_orders(
@@ -497,7 +551,7 @@ def _value(panel, date, instrument_id):
     if date not in panel.index or instrument_id not in panel.columns:
         return None
     value = panel.at[date, instrument_id]
-    return None if pd.isna(value) else float(value)
+    return None if not np.isfinite(value) else float(value)
 
 
 def _fill(time, instrument_id, qty, price, fee_rate=0.0, slippage_bps_value=0.0):
@@ -513,14 +567,12 @@ def _fill(time, instrument_id, qty, price, fee_rate=0.0, slippage_bps_value=0.0)
 
 
 def _funding(timestamp, instrument_id, rate, mark_price):
-    # The tape's funding rows carry no price, so the position's latest mark
-    # (the previous daily close for an overnight event) prices the cashflow.
     return {
         "time": timestamp.isoformat(),
         "type": "FUNDING",
         "instrument_id": instrument_id,
         "rate": rate,
-        "mark_price": mark_price if mark_price is not None else 0.0,
+        "mark_price": mark_price,
     }
 
 
