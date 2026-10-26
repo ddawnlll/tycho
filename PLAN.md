@@ -83,6 +83,7 @@ Then follow `docs/dispatch-plan.md`: independent verification before closure, ex
 No Modal execution: skill/PLAN prohibit it and the budget is owner-only; small synthetic checks stay local. Undefined scientific rules remain BLOCKED, never guessed.
 Owner decisions discovered: #45 (zero-crossing policy), #46 (null/baseline preservation rules). Public scanner interface supplied in `docs/scanner-interface.md` for blind-worker request #47.
 Additional blockers: #51 (1h execution tape), #52 (manifest text/registry conflict), #53 (cost-bearing exact scanner parity). V0/V1/V4 fixes: #48/#58, #49, #50. #30 implementation is in PR #54 with closed-bar review fix #56; no unchecked item is marked complete.
+Slot B staging: original tolerance-first commit `26f1d9b` is merged unchanged, independently reviewed and full-suite green. Dispatch explicitly allows #38 after this standalone commit; #35 remains open/BLOCKED (#45/#53), and no general scanner parity is claimed. Install Nautilus only in an exclusive test-free window.
 
 ```text
 M0 T0.5 ─► V0
@@ -443,7 +444,8 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
   - **PENDING / BLOCKED:** All E-001 PENDING values → synthetic placeholders only in --synthetic mode, recorded in the trial record.
   - **Out of scope:** Real data; Modal; DuckDB archive.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17), T4.1 [#22](https://github.com/ddawnlll/tycho/issues/22), T4.2 [#23](https://github.com/ddawnlll/tycho/issues/23)
-- [ ] **T4.4** E-001 diagnostics: constant-notional variant, 1h delay, turnover report — [#25](https://github.com/ddawnlll/tycho/issues/25)
+- [ ] **T4.4** E-001 diagnostics: constant-notional variant, 1h delay, turnover report — [#25](https://github.com/ddawnlll/tycho/issues/25)  
+  Constant-notional variant exists and is proven. Missing: `diagnostic: true` flags, exact traded-weight turnover (current notional/mean-equity differs), forced-delist inclusion, yearly totals, counted turnover trial. 1h delay BLOCKED #51. New tests written in isolated worktree (2 pass / 5 fail on old code); source patch deliberately serialised after #36's checkpoint hook because both own `e001.py`.
   - **Goal:** Diagnostics the monograph requires next to the main run — counted in the trial log, never pass criteria.
   - **Read in the monograph:**
     - §14 `#e001` → "Boyutlandırma" (Teşhis: sabit nominal), "Karar ve dolum" (1h gecikme robustness)

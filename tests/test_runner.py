@@ -91,6 +91,17 @@ def test_non_synthetic_run_raises_pending(tape, tmp_path):
         run_e001(tape, params, synthetic=False)
 
 
+def test_original_six_perp_tape_fails_closed_without_payment_time_marks(tmp_path):
+    # Retain the original multiasset scenario: unlike the positive mechanism
+    # fixture above, its unmodified daily tape cannot price intraday funding.
+    tape = make_synthetic_tape(seed=3, n_perps=6, days=500)
+    assert tape.bars_1d["instrument_id"].nunique() == 6
+    path = tmp_path / "trials.jsonl"
+    with pytest.raises(ValueError, match="funding unavailable at payment time"):
+        run_e001(tape, {**PARAMS, "trials_path": path}, synthetic=True)
+    assert not path.exists()
+
+
 def test_cli_writes_result_json(tape, tmp_path, monkeypatch):
     params_path = tmp_path / "params.json"
     params_path.write_text(json.dumps({**PARAMS, "trials_path": str(tmp_path / "t.jsonl")}))

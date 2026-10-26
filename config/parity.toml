@@ -1,0 +1,4 @@
+# Frozen before the first T6.1 parity run; absolute USDT differences, no rtol.
+# Synthetic reference capitals: 500 and 100000 USDT (not research defaults).
+daily_pnl_abs_diff = 0.00000001
+total_pnl_abs_diff = 0.0000001

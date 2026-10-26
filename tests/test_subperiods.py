@@ -90,9 +90,22 @@ def test_net_inputs_keep_costs_unknowns_and_absent_subperiods_explicit():
 
 def test_components_execute_pipeline_and_log_each_actual_trial(tmp_path, monkeypatch):
     tape = make_synthetic_tape(seed=3, n_perps=2, days=350)
+    # Explicit synthetic payment-time fixture, not a production mark reconstruction:
+    # daily marks/rates publish instantly; intraday payment marks are fixed at each
+    # asset's initial synthetic price, not interpolated or silently forward-filled.
+    fixture_prices = tape.mark.groupby("instrument_id")["mark_price"].first()
+    for frame in (tape.mark, tape.funding):
+        frame["available_at"] = frame["received_at"] = frame["event_time"]
+    payment_marks = tape.funding[tape.funding["event_time"].dt.hour != 0].copy()
+    payment_marks["event_id"] = "fixture:payment-mark:" + payment_marks["event_id"]
+    payment_marks["mark_price"] = payment_marks["instrument_id"].map(fixture_prices)
+    tape.mark = pd.concat([tape.mark, payment_marks[tape.mark.columns]], ignore_index=True)
+    assert tape.bars_1d["instrument_id"].nunique() == 2
     # Synthetic fixture values only; all research PENDING values remain untouched.
     params = {
         "on_abstain": "flat", "decision_lag": "1min",
+        "executable_latency": "1D",
+        "synthetic_execution_policy": "SYNTHETIC_PUBLISHED_DAILY_MARK",
         "ewma_convention": {"kind": "span", "value": 60, "returns": "log", "min_periods": 20},
         "max_staleness": "2D", "absolute_band_nav": 0.01,
         "partial_ratio": 1.0, "research_nominal_usd": 1_000_000.0,
@@ -117,9 +130,11 @@ def test_components_execute_pipeline_and_log_each_actual_trial(tmp_path, monkeyp
     assert len({out["params_hash"] for out in result.values()}) == len(periods)
     for i, k in enumerate(periods):
         out = result[k]
+        assert out["execution_policy"] == params["synthetic_execution_policy"]
         pair = records[2*i:2*i+2]
         assert out["trial_hashes"] == [record["hash"] for record in pair]
         for record in pair:
+            assert record["execution_policy"] == params["synthetic_execution_policy"]
             assert record["params_hash"] == out["params_hash"]
             assert record["metrics"] == out["metrics"][record["variant"]]
         assert out["metrics"]["main"]["trade_count"] > 0
