@@ -308,7 +308,8 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
   - **PENDING / BLOCKED:** Binding live window length → BLOCKED (X3.a). ewma_convention → test fixture value, clearly marked synthetic.
   - **Out of scope:** Choosing a binding window length; editing config.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17)
-- [ ] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43)
+- [x] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43), `d829405`; independent Astra PASS for all five findings, integrated acceptance 39 passed / full suite 271 passed.
+- [ ] **T3.5** Delayed-current-bar readiness must agree between panel and snapshot — #61 (new independent V3 finding; ahead of dependent replay work).
   - **Goal:** Close the M3 verifier findings (wf_4bf0a3cb-a4f); the blocker is a point-in-time leak in the vectorized full-history path.
   - **Contract:** (1) blocker: `vectorized.trend_panels` builds from the end-of-tape view, so later revisions leak into earlier rows; (2) cov evaluated one bar before the decision time — add a test where the vol cap binds; (3) NaN latest close must ABSTAIN, not fall back; (4) `on_abstain` required argument, no default; (5) same MA NaN handling in panel and snapshot paths.
   - **Acceptance:** `uv run pytest -q tests/test_window_equality.py tests/test_portfolio.py tests/test_exp_trend.py`
