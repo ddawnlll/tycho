@@ -122,3 +122,8 @@
 - V7 #39 independent audit at `f1a5440`: **BLOCKED, not PASS**. It reproduced the full suite (`361 passed in 165.55s`), confirmed protected paths/PENDING/parity-tolerance integrity, ran its own PIT and Nautilus probes, and verified no weakened or skipped tests. Stop condition unmet because every non-cancelled open item remains `[ ]` behind the owner decisions above. Findings: T4.1 hardcodes the zero-crossing interpretation (covered by #45); T4.4's 1h sub-item is not implemented (covered by #51); checkpoint hashes are unkeyed (caller-supplied local evidence, residual). Final summary posted on #39.
 
 
+
+## 2026-10-26 — Owner decisions v1.3.3 and CI
+- Recorded owner decisions D-39..D-43 verbatim in `docs/owner-decisions-v1.3.3.md`; added the binding-precedence line to CLAUDE.md and `execution.zero_crossing_rule = "full_trade_on_zero_or_cross"` to config. Commit `4b94313`. Full suite after the change: `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run pytest -q` → `361 passed in 215.79s`. Protected diff against `2e556a3` (golden, parity.toml, monograph HTML) empty; no other config line touched.
+- #45/#46/#52/#53 received the D-xx resolution comment and lost the `blocked` label; #51 stays open with `deferred-real-data` (D-43).
+- CI added in PR #70: `.github/workflows/tests.yml` runs `uv sync --frozen` + `uv run pytest -q` on main pushes and PRs with BLAS/OMP threads bounded. First green run: https://github.com/ddawnlll/tycho/actions/runs/40329326876 (2m56s). Merged as `9f30936`. No cache/matrix/deploy steps.
