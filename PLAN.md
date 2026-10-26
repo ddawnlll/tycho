@@ -174,7 +174,8 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
   Acceptance: `uv run pytest -q tests/test_feasibility.py tests/test_tape.py`
 - [CANCELLED owner 2026-10-25] **X1.a** G0 run on real Binance data — [#10](https://github.com/ddawnlll/tycho/issues/10) · BLOCKED  
   Needs dev_end_date [OWNER] and G0 sufficiency thresholds (PENDING). Owner cancelled 2026-10-25.
-- [ ] **V1** M1 verifier (G0 tape + audit) — [#11](https://github.com/ddawnlll/tycho/issues/11) · verifier
+- [x] **T1.4** Reject invalid/non-finite G0 thresholds — #49, `6fb1f20`; independent Astra PASS, integrated acceptance 89 passed, full suite 252 passed.
+- [x] **V1** M1 verifier (G0 tape + audit) — [#11](https://github.com/ddawnlll/tycho/issues/11) · verifier
   - **Goal:** The first M1 verifier run was interrupted by /exit and the re-run result is not recorded. Verify T1.1/T1.2 from a clean context.
   - **Read in the monograph:**
     - §08A.2 tape contract; §14 G0 scope; registry `feasibility.data.prohibited`
