@@ -108,3 +108,15 @@
 - Coordinator moved only its own `/tmp` virtualenv to disk-backed `/home/admin/.cache/tycho-envs/main` (`.venv` is now a symlink) to fit the Nautilus install; `uv run` usage unchanged. No source/protected changes.
 - Merged #25 (`bc3b76c` + review fixes `bd5be53`, PR #67) after two independent rounds. `main` stays un-flagged; `constant_notional` and `turnover` are counted hash-chained trials with `diagnostic: true`. Turnover is summed traded weights at execution (equity before trades = wallet-at-cost + unrealized at that day's marks), per execution calendar year, delist exits included, warm-start fills excluded; it never feeds pass criteria. Independent review found #68 (bar-date year → execution year) and #69 (production-scale exact-step false rejection: 1e-7 step-count tolerance → scale-free quantization), both fixed with regressions. Integrated acceptance `uv run pytest -q tests/test_diagnostics.py` → `10 passed in 23.59s`; full suite → `361 passed in 164.00s (0:02:44)`. 1h-delay diagnostic remains BLOCKED #51; no fake intraday claim.
 - Staged only blind worker's original pre-run tolerance commit `26f1d9b` on main (same USDT limits, no edits). Scoped independent review recorded on #57; integrated full suite `uv run pytest -q` → `285 passed in 220.79s (0:03:40)` with BLAS/OMP bounded. This unlocks #38 under dispatch §3 slot B's explicit tolerance-first ordering without claiming #35 complete. Full reference PR #57 remains draft/unmerged and #45/#53 open. Nautilus installation must wait for a test-free window.
+
+## 2026-10-26 — Final status before V7 (owner-independent work complete)
+- Completed and independently verified: V0 #7, V1 #11, V3 #20, T3.4 #43, T3.5 #61, T4.4 #25/#68/#69, T4.5 #50, T5.3 #30/#56, T6.2 #36, T7.1 #38, plus fixes T0.6/T0.7 #48/#58, T1.4 #49, and scanner-interface documentation #47. main at `6c48d25`.
+- Every merge was gated on an exact acceptance command and an integrated `uv run pytest -q` on main; protected-path diff since `92d89e3` is empty and `config/tycho.toml` still contains every PENDING marker.
+- Blocked on owner decisions (no interpretation taken):
+  - #46 null/baseline preservation → blocks T5.1 #28 → T5.4 #31 → T5.5 #32 → V5 #34.
+  - #45 zero-crossing execution policy (monograph says "separate rule" but gives none) and #53 frozen-tolerance vs approximate scanner → block T6.1 #35 → V6 #37.
+  - #52 manifest text/registry conflict (`id`/`expert_id`, missing `snapshot_schema`) → blocks V2 #15.
+  - #51 no intraday executable tape → blocks the 1h-delay part of T4.4 and partly V4 #27.
+- V4 #27 and V6 #37 therefore cannot PASS yet; V7 #39 is the stop condition and cannot pass while non-cancelled items remain open. T7.1 parity itself is green at the frozen tolerance.
+- Residual risks recorded: verifiers share the owner-requested DeepSeek model family (fresh contexts, no authorship); Nautilus forces pandas 3.1.0→2.3.3 (suite green, earlier numbers not directly comparable); daily bars cannot distinguish 1 ns vs 1 s latency in the Nautilus fixture.
+
