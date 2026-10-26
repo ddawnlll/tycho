@@ -500,7 +500,8 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
 
 Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthetic joint power. Open: 5/7.
 
-- [ ] **T5.1** Baselines + hand-written null generators — [#28](https://github.com/ddawnlll/tycho/issues/28)
+- [x] **T5.1** Baselines + hand-written null generators — [#28](https://github.com/ddawnlll/tycho/issues/28)  
+  D-40 implemented in `nulls.py`: run-scramble preserves `|w|`, date-wise gross and block metadata; random entry preserves per-asset run/flat length multisets, pre-cap `|w|` and eligibility, applies the 2.0 gross cap with a reported bind count; equal-risk B&H (score +1), BTC-only (b=target vol) and no-trade baselines; every run goes through the same sequential ledger and appends `role`-tagged trials with DSR membership PENDING. Two review rounds fixed zero-eligible columns (#28 crash) and confirmed e001 behavior-identical. Residual: adjacent-run signs are conditioned to preserve run lengths (documented; joint independence lost at those boundaries).
   - **Goal:** The comparison set every E-001 result is judged against, with nulls that preserve exposure so they cannot be passed trivially.
   - **Read in the monograph:**
     - §11 `#dogrulama` → "Ek testler" row "Temel çizgiler" (run-based scrambling, why not daily)
