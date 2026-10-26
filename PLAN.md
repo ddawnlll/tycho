@@ -141,7 +141,8 @@ Package, config with PENDING kept, guard hook, cleanup script. Open: 2/7.
   M0 verifier found heuristic bypasses. The guard protects itself, so only the owner can change it. Owner cancelled 2026-10-25; known residual risk.
 - [CANCELLED owner 2026-10-25] **X0.b** OS-level lock of guard, golden and prereg (chattr +i / separate user / branch protection) — [#6](https://github.com/ddawnlll/tycho/issues/6) · BLOCKED  
   Monograph wants separate credentials for the protected judge. Owner cancelled 2026-10-25; the hook stays a heuristic guard.
-- [ ] **V0** M0 verifier re-run after T0.5 — [#7](https://github.com/ddawnlll/tycho/issues/7) · verifier
+- [x] **T0.6 / T0.7** Preserve locked/archival-failed worktrees, including generic-directory overlaps — #48 / #58, commits `74fe1ef` / `8c69f50`. Independent Astra PASS (12 adversarial probes); integrated acceptance: 21 passed; full suite: 196 passed.
+- [x] **V0** M0 verifier re-run after T0.5 — [#7](https://github.com/ddawnlll/tycho/issues/7) · verifier
   - **Goal:** First run (wf_4e6413d1-3f8) = FAIL → T0.5. Re-verify cleanup.py after the fixes. Guard bypasses are a known, owner-cancelled residual risk — do not re-report them.
   - **Read in the monograph:**
     - CLAUDE.md protected set
