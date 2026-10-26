@@ -478,7 +478,8 @@ Golden cases, authoritative D-22 ledger, numpy scanner, one-command DEV runner, 
   - **Depends on:** T4.3 [#24](https://github.com/ddawnlll/tycho/issues/24)
 - [CANCELLED owner 2026-10-25] **X4.a** E-001 DEV on real data — [#26](https://github.com/ddawnlll/tycho/issues/26) · BLOCKED  
   Needs dev_end_date, research nominal, absolute band, partial ratio, EWMA convention, latency (all PENDING) and the owner prereg lock (G1). Owner cancelled 2026-10-25.
-- [ ] **V4** M4 verifier (ledger, scanner, runner) — [#27](https://github.com/ddawnlll/tycho/issues/27) · verifier
+- [x] **V4** M4 verifier (ledger, scanner, runner) — [#27](https://github.com/ddawnlll/tycho/issues/27) · verifier  
+  Fresh-context PASS at `72ec39a`: full suite `420 passed in 307.57s`; V4-focused `149 passed`. Golden blindness confirmed by ancestry and empty golden diff; D-39 rules pinned; funding at the funding instant; four seeded faults fail; PIT execution/latency, trial chain, diagnostics, D-41 scanner scope verified. Minors recorded: the D-39 config key is inert in `ledger.rebalance_orders`, `docs/ledger-spec.md` still calls the rule a coordinator interpretation, no tracked trial-log artifact.
   - **Goal:** Clean-context check that the ledger is authoritative and correct, golden cases were written blind, and the trial log cannot be rewritten.
   - **Read in the monograph:**
     - §07 accounting contract; §10 scan formula; §11 golden scenarios; registry `accounting_ledger`
