@@ -639,7 +639,8 @@ Blind reference ledger, scanner↔reference↔ledger parity, full vs windowed re
   - **PENDING / BLOCKED:** Same required args as T4.1.
   - **Out of scope:** Changing tolerances after seeing a diff; editing the ledger to match the reference without a root cause.
   - **Depends on:** T4.1 [#22](https://github.com/ddawnlll/tycho/issues/22), T4.2 [#23](https://github.com/ddawnlll/tycho/issues/23)
-- [ ] **T6.2** Full replay vs windowed replay + restart equality — [#36](https://github.com/ddawnlll/tycho/issues/36)
+- [x] **T6.2** Full replay vs windowed replay + restart equality — [#36](https://github.com/ddawnlll/tycho/issues/36)  
+  Optional checkpoint/stop hook reuses the production simulator; state (book, pending orders, accounting, equity history) carried across windows and an abrupt fresh process. Independent verifier PASS incl. slice-level event equality over multiple seeds. Integrated acceptance: 28 passed; full suite: 346 passed.
   - **Goal:** Parallel time windows (with warm-up) and a restart mid-run give the same results and evidence hashes as one full replay.
   - **Read in the monograph:**
     - §11 `#dogrulama` → "Ek testler" row "Tam replay ↔ pencereli replay" (caught a V7 funding bug)
