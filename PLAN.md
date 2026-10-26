@@ -568,7 +568,8 @@ Baselines and nulls, DSR, block bootstrap, HAC alpha, six-criteria gate, synthet
   - **PENDING / BLOCKED:** —
   - **Out of scope:** Regime gating; adding gates.
   - **Depends on:** T4.3 [#24](https://github.com/ddawnlll/tycho/issues/24)
-- [ ] **T5.4** Six-criteria gate evaluator (PASS / FAIL / BLOCKED / INVALID) — [#31](https://github.com/ddawnlll/tycho/issues/31)
+- [x] **T5.4** Six-criteria gate evaluator (PASS / FAIL / BLOCKED / INVALID) — [#31](https://github.com/ddawnlll/tycho/issues/31)  
+  Single `evaluate(...)` with required keyword thresholds (`dsr_threshold`, `alpha_level`, `null_top_fraction`, `component_periods`, `null_reps`) and no defaults. Boundaries: DSR `>=`, alpha point `>0` with one-sided `p<1-level`, strict top-1% of BOTH nulls, all four MA components `>0`, both subperiods `>0`. Holdout never evaluated: only an explicit owner attestation; unsigned → BLOCKED, signed negative → FAIL (KALDI). Precedence INVALID > BLOCKED > FAIL > PASS; accepts real `stats`/`subperiods` result dicts directly. Two review rounds fixed a fail-open component set (#75) and a signed-negative-holdout misclassification (#76). Integrated acceptance 99 passed; full suite 532 passed.
   - **Goal:** One function that evaluates all six E-001 criteria together; any BLOCKED makes the overall verdict not PASS; holdout criterion is always OWNER.
   - **Read in the monograph:**
     - §14 `#e001` → "Başarı ölçütleri (hepsi birden)", "Üç sonuç ve sonrası", "Yasaklar"
