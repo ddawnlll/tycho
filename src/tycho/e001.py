@@ -14,6 +14,7 @@ not a production fill model or the 1h diagnostic; those remain blocked on #51.
 import argparse
 import json
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -301,19 +302,89 @@ def _delists(instruments, date):
     }
 
 
-def _simulate(prep, targets, settings) -> dict:
+def _replay_input_hash(prep, targets, settings):
+    inputs = {
+        key: frame_hash(value.reset_index())
+        for key, value in prep.items() if isinstance(value, pd.DataFrame)
+    }
+    inputs.update(
+        dates=[date.isoformat() for date in prep["dates"]],
+        as_of=frame_hash(prep["as_of"].to_frame(name="as_of").reset_index()),
+        instruments={i: {k: asdict(v) for k, v in row.items()}
+                     for i, row in prep["instruments"].items()},
+        funding=prep["funding"], delists=prep["delists"],
+        targets=frame_hash(targets.reset_index()),
+        settings={k: v for k, v in settings.items() if k != "trials_path"},
+        git_head=_git_head(),
+    )
+    return canonical_hash(json.loads(json.dumps(inputs, default=str)))
+
+
+def _simulate(prep, targets, settings, *, checkpoint=None, stop=None) -> dict:
+    """Execute [checkpoint.next_day, stop); retain the full PIT input/warm-up panels.
+
+    A checkpoint is local JSON evidence, bound to these inputs and this git head.
+    Only completed days are checkpointed; opening fills restore the book once per day.
+    """
     dates = prep["dates"]
     nominal = settings["research_nominal_usd"]
-    wallet = nominal
-    positions, entry = {}, {}
-    orders = {}
-    equity_series = [nominal]
-    identity_error = 0.0
-    fees_total = funding_total = traded_notional = 0.0
-    trade_count = 0
-    weights_rows, cost_rows, rate_rows = [], [], []
+    state = {
+        "input_hash": _replay_input_hash(prep, targets, settings),
+        "next_day": 0, "watermark": None,
+        "wallet": nominal, "positions": {}, "entry": {}, "orders": {},
+        "equity_series": [nominal], "identity_error": 0.0,
+        "fees_total": 0.0, "funding_total": 0.0, "traded_notional": 0.0,
+        "trade_count": 0, "weights_rows": [], "cost_rows": [], "rate_rows": [],
+    }
+    if checkpoint is not None:
+        try:
+            # Round-trip also detaches mutable history from the caller's checkpoint.
+            saved = json.loads(json.dumps(checkpoint["state"], allow_nan=False))
+            if (set(saved) != set(state)
+                    or checkpoint["hash"] != canonical_hash(saved)
+                    or saved["input_hash"] != state["input_hash"]):
+                raise ValueError("checkpoint hash or replay inputs differ")
+            start = saved["next_day"]
+            if type(start) is not int or not 0 <= start <= len(dates):
+                raise ValueError("invalid checkpoint next_day")
+            watermark = prep["as_of"].iloc[start - 1].isoformat() if start else None
+            if (saved["watermark"] != watermark
+                    or len(saved["equity_series"]) != start + 1
+                    or saved["equity_series"][0] != nominal
+                    or any(len(saved[k]) != start for k in ("weights_rows", "cost_rows", "rate_rows"))
+                    or set(saved["positions"]) != set(saved["entry"])):
+                raise ValueError("inconsistent checkpoint boundary/state")
+            known = prep["instruments"][start - 1] if start else {}
+            for key in ("positions", "entry", "orders"):
+                book = saved[key]
+                if (not isinstance(book, dict) or not book.keys() <= known.keys()
+                        or any(type(v) not in (int, float) or v == 0 for v in book.values())):
+                    raise ValueError(f"invalid checkpoint {key}")
+            if (any(type(saved[k]) not in (int, float) for k in (
+                    "wallet", "identity_error", "fees_total", "funding_total", "traded_notional"))
+                    or type(saved["trade_count"]) is not int or saved["trade_count"] < 0
+                    or any(v <= 0 for v in saved["entry"].values())):
+                raise ValueError("invalid checkpoint accounting values")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"invalid replay checkpoint: {exc}") from exc
+        state = saved
+    start = state["next_day"]
+    stop = len(dates) if stop is None else stop
+    if type(stop) is not int or not start <= stop <= len(dates):
+        raise ValueError("stop must be a day boundary at or after checkpoint.next_day")
+    wallet, positions, entry, orders = (state[k] for k in ("wallet", "positions", "entry", "orders"))
+    equity_series = state["equity_series"]
+    identity_error = state["identity_error"]
+    fees_total, funding_total, traded_notional = (
+        state[k] for k in ("fees_total", "funding_total", "traded_notional")
+    )
+    trade_count = state["trade_count"]
+    weights_rows, cost_rows, rate_rows = (
+        state[k] for k in ("weights_rows", "cost_rows", "rate_rows")
+    )
 
-    for i, date in enumerate(dates):
+    for i in range(start, stop):
+        date = dates[i]
         as_of = prep["as_of"].loc[date]
         instruments = prep["instruments"][i]
         for instrument_id in positions.keys() | orders.keys():
@@ -458,6 +529,7 @@ def _simulate(prep, targets, settings) -> dict:
         cost_rows.append(costs)
         rate_rows.append(rates)
 
+        orders = {}
         if i + 1 < len(dates):
             marks = close_marks
             target = {}
@@ -484,11 +556,22 @@ def _simulate(prep, targets, settings) -> dict:
     metrics = _metrics(
         equity_series, fees_total, funding_total, traded_notional, trade_count
     )
+    state.update(
+        next_day=stop, watermark=prep["as_of"].iloc[stop - 1].isoformat() if stop else None,
+        wallet=wallet, positions=positions, entry=entry, orders=orders,
+        identity_error=identity_error, fees_total=fees_total, funding_total=funding_total,
+        traded_notional=traded_notional, trade_count=trade_count,
+    )
+    evidence_hash = canonical_hash(state)
     return {
+        "checkpoint": {"state": state, "hash": evidence_hash},
+        "equity": equity_series[start + 1:],
+        "evidence_hash": evidence_hash,
         "metrics": metrics,
         "identity_max_abs_error": identity_error,
         "scanner_max_abs_diff": _scanner_diff(
-            prep, weights_rows, cost_rows, rate_rows, equity_series, settings
+            {**prep, "dates": dates[:stop]},
+            weights_rows, cost_rows, rate_rows, equity_series, settings
         ),
     }
 
