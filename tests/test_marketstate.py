@@ -202,6 +202,30 @@ def test_missing_and_stale_flags(provider):
     assert bool(tight.availability.loc["BTCUSDT", "missing"]) is False
 
 
+@pytest.mark.parametrize("absent", [False, True])
+def test_current_daily_close_required_despite_enough_recent_history(provider, tape, absent):
+    date = pd.Timestamp("2019-11-10", tz="UTC")
+    current = (tape.bars_1d["instrument_id"] == "BTCUSDT") & (tape.bars_1d["event_time"] == date)
+    publication = date + pd.Timedelta("1h")
+    if absent:
+        tape.bars_1d = tape.bars_1d.loc[~current].reset_index(drop=True)
+    else:
+        tape.bars_1d.loc[current, ["available_at", "received_at"]] = publication
+    for as_of, missing in (
+        (date, False),  # a same-stamp bar is not closed yet
+        (date + pd.Timedelta("1min"), True),
+        (publication - pd.Timedelta("1ns"), True),
+        (publication, absent),
+        (date + pd.Timedelta("1D1min"), False),
+    ):
+        snapshot = provider.resolve(request(as_of))
+        row = snapshot.availability.loc["BTCUSDT"]
+        assert row["n_bars"] == 60
+        assert not row["stale"]
+        assert bool(row["missing"]) is missing
+        assert (snapshot.bars["event_time"] < as_of).all()
+
+
 def test_repeated_resolve_returns_the_same_object(provider):
     first = provider.resolve(request("2019-11-10"))
     assert provider.resolve(request("2019-11-10")) is first
