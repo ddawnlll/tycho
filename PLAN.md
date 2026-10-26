@@ -681,7 +681,8 @@ Blind reference ledger, scanner↔reference↔ledger parity, full vs windowed re
 
 Pinned stable nautilus_trader executes precomputed targets; parity within pre-written tolerance. Open: 2/2.
 
-- [ ] **T7.1** Nautilus parity: precomputed targets with imposed fills + latency model — [#38](https://github.com/ddawnlll/tycho/issues/38)
+- [x] **T7.1** Nautilus parity: precomputed targets with imposed fills + latency model — [#38](https://github.com/ddawnlll/tycho/issues/38)  
+  Pinned stable `nautilus_trader==1.221.0` (not RC). Real `BacktestEngine` executes a precomputed target array; next-bar imposed fills at the same cost model, required positive latency (zero is refused; removing the model gives same-close fills), supplied funding posted at exact times. Two independent PASS rounds; daily diff `5.68e-14` / total `0.0` USDT against unchanged `config/parity.toml`. Dependency note: the lock downgrades pandas `3.1.0 → 2.3.3`; full suite re-run green under it. Residual: daily bars cannot distinguish 1 ns from 1 s latency.
   - **Goal:** Pinned stable nautilus_trader executes the precomputed target weights on the synthetic tape (it does not decide); parity vs the ledger within the pre-written tolerance.
   - **Read in the monograph:**
     - §10 `#altyapi` → "Nautilus: rolü ve hızlandırma" and "Nautilus uyarıları" (stable pin, latency model mandatory, bypass_logging, run_analysis=False)
