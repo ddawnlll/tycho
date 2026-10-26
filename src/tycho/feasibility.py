@@ -6,6 +6,7 @@ module only counts rows and ratios of the tape itself.
 
 import argparse
 import json
+from numbers import Real
 from pathlib import Path
 
 import numpy as np
@@ -298,7 +299,12 @@ def _failing_thresholds(metrics, thresholds) -> list:
     for key in _THRESHOLD_KEYS:
         value, kind = checks[key]
         limit = thresholds.get(key) if hasattr(thresholds, "get") else None
-        if limit is None or value is None or pd.isna(value):
+        if (isinstance(limit, bool) or not isinstance(limit, Real)
+                or not np.isfinite(limit) or limit < 0
+                or (kind == "min" and limit > 1)
+                or (kind == "max" and limit != int(limit))):
+            failing.append(key)
+        elif value is None or pd.isna(value):
             failing.append(key)
         elif (kind == "min" and value < limit) or (kind == "max" and value > limit):
             failing.append(key)

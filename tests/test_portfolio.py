@@ -34,7 +34,7 @@ def test_risk_budget_numeric():
 def test_calibration_hits_target_with_no_shrink():
     cov = const_corr_cov(IDS, 0.6, 0.7)
     weights, diag = target_weights(
-        flat(), flat(value=0.6), cov, 0.20, 0.7, 30, 2.0, 2.0
+        flat(), flat(value=0.6), cov, 0.20, 0.7, 30, 2.0, 2.0, on_abstain="flat"
     )
     assert forecast(weights, cov) == pytest.approx(0.20, abs=1e-12)
     assert diag["forecast_vol"] == pytest.approx(0.20, abs=1e-12)
@@ -46,7 +46,7 @@ def test_calibration_hits_target_with_no_shrink():
 def test_vol_cap_scales_book_to_twice_target():
     # scores cannot exceed 1, so the vol cap is reached by shrinking vols instead
     cov = const_corr_cov(IDS, 0.6, 0.7)
-    weights, diag = target_weights(flat(), flat(value=0.2), cov, 0.20, 0.7, 30, 2.0, 2.0)
+    weights, diag = target_weights(flat(), flat(value=0.2), cov, 0.20, 0.7, 30, 2.0, 2.0, on_abstain="flat")
     assert diag["forecast_vol"] == pytest.approx(0.60, abs=1e-12)
     assert diag["s"] == pytest.approx(2.0 / 3.0, rel=1e-15)
     assert diag["cap"] == "vol_cap"
@@ -55,7 +55,7 @@ def test_vol_cap_scales_book_to_twice_target():
 
 def test_gross_cap_scales_book_to_two():
     cov = const_corr_cov(IDS, 0.6, 0.0)  # forecast 0.26 < 0.40, so the vol cap is slack
-    weights, diag = target_weights(flat(), flat(value=0.1), cov, 0.20, 0.7, 30, 2.0, 2.0)
+    weights, diag = target_weights(flat(), flat(value=0.1), cov, 0.20, 0.7, 30, 2.0, 2.0, on_abstain="flat")
     assert diag["raw_gross"] == pytest.approx(2.373563316387707, rel=1e-14)
     assert diag["cap"] == "gross_cap"
     assert diag["s"] == pytest.approx(0.8426149773176357, rel=1e-14)
@@ -66,7 +66,7 @@ def test_abstain_and_nan_vol_get_zero():
     scores = pd.Series([1.0, np.nan, 1.0, 1.0], index=list("ABCD"))
     vols = pd.Series([0.6, 0.6, np.nan, 0.0], index=list("ABCD"))
     cov = pd.DataFrame(np.eye(4) * 0.36, index=list("ABCD"), columns=list("ABCD"))
-    weights, diag = target_weights(scores, vols, cov, 0.20, 0.7, 30, 2.0, 2.0)
+    weights, diag = target_weights(scores, vols, cov, 0.20, 0.7, 30, 2.0, 2.0, on_abstain="flat")
     assert list(weights) == [pytest.approx(B_EXPECTED / 0.6), 0.0, 0.0, 0.0]
     assert weights.index.tolist() == list("ABCD")
     assert diag["forecast_vol"] == pytest.approx(B_EXPECTED, rel=1e-14)
@@ -75,9 +75,9 @@ def test_abstain_and_nan_vol_get_zero():
 def test_scale_never_levers_up():
     tiny = pd.Series(1e-6, index=IDS, dtype=float)
     cov = const_corr_cov(IDS, 0.6, 0.7)
-    _, diag = target_weights(flat(value=0.1), flat(value=5.0), cov, 0.20, 0.7, 30, 2.0, 2.0)
+    _, diag = target_weights(flat(value=0.1), flat(value=5.0), cov, 0.20, 0.7, 30, 2.0, 2.0, on_abstain="flat")
     assert diag["s"] == 1.0
-    _, diag = target_weights(flat(value=0.1), tiny, cov, 0.20, 0.7, 30, 2.0, 2.0)
+    _, diag = target_weights(flat(value=0.1), tiny, cov, 0.20, 0.7, 30, 2.0, 2.0, on_abstain="flat")
     assert 0.0 < diag["s"] < 1.0
 
 
@@ -94,6 +94,7 @@ def test_negative_forecast_variance_raises():
             30,
             2.0,
             2.0,
+            on_abstain="flat",
         )
 
 
@@ -120,8 +121,21 @@ def test_config_wiring():
     cov = const_corr_cov(IDS, 0.6, rho)
     weights, diag = target_weights(
         flat(index=IDS), flat(value=0.6, index=IDS), cov,
-        target_vol, rho, n, vol_cap_multiple, gross_cap,
+        target_vol, rho, n, vol_cap_multiple, gross_cap, on_abstain="flat",
     )
     assert diag["b"] == pytest.approx(B_EXPECTED, rel=1e-14)
     assert forecast(weights, cov) == pytest.approx(0.20, abs=1e-12)
     assert diag["s"] == 1.0
+
+
+def test_abstain_policy_is_required_even_for_defined_scores():
+    cov = const_corr_cov(IDS, 0.6, 0.7)
+    with pytest.raises(TypeError, match="on_abstain"):
+        target_weights(flat(), flat(value=0.6), cov, 0.20, 0.7, 30, 2.0, 2.0)
+
+
+@pytest.mark.parametrize("policy", [None, "PENDING", "hold", "typo"])
+def test_unsupported_abstain_policy_is_rejected(policy):
+    cov = const_corr_cov(IDS, 0.6, 0.7)
+    with pytest.raises(ValueError, match="on_abstain"):
+        target_weights(flat(), flat(value=0.6), cov, 0.20, 0.7, 30, 2.0, 2.0, on_abstain=policy)

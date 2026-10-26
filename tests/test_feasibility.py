@@ -52,6 +52,21 @@ def test_permissive_thresholds_pass(tape):
     assert audit(tape, PERMISSIVE)["verdict"] == "PASS"
 
 
+@pytest.mark.parametrize("limit", [float("nan"), float("inf"), -float("inf"),
+                                 "PENDING", "0.5", None, True, False, [], {}, -0.1])
+@pytest.mark.parametrize("key", PERMISSIVE)
+def test_invalid_thresholds_never_pass(tape, key, limit):
+    report = audit(tape, {**PERMISSIVE, key: limit})
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["reasons"] == [f"threshold failed: {key}"]
+
+
+def test_month_limit_requires_a_nonnegative_integer(tape):
+    report = audit(tape, {**PERMISSIVE, "max_months_below_30": 1.5})
+    assert report["verdict"] == "INCOMPLETE"
+    assert report["reasons"] == ["threshold failed: max_months_below_30"]
+
+
 def test_threshold_failure_incomplete(tape):
     strict = dict(PERMISSIVE, min_delisted_coverage=1.1)
     report = audit(tape, strict)

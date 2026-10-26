@@ -287,7 +287,7 @@ def test_undetectable_base_keeps_worktree_with_commits(tmp_path, fake_cache_bin)
     assert "base branch undetected" in progress
 
 
-def test_locked_worktree_removed_with_double_force(tmp_path, fake_cache_bin):
+def test_locked_worktree_is_kept(tmp_path, fake_cache_bin):
     bindir, _ = fake_cache_bin
     repo, _, unmerged = build_repo(tmp_path)
     git(repo, "worktree", "lock", str(unmerged))
@@ -296,13 +296,84 @@ def test_locked_worktree_removed_with_double_force(tmp_path, fake_cache_bin):
     applied = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
 
     assert applied.returncode == 0, applied.stderr
-    assert not unmerged.exists()
+    assert unmerged.exists()
+    assert "kept: locked" in applied.stdout
+    assert "locked" in git(repo, "worktree", "list", "--porcelain").stdout
 
 
-def test_removal_failure_recorded_others_continue(tmp_path, fake_cache_bin):
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("include_worktrees", [False, True])
+def test_generic_cleanup_cannot_delete_locked_worktrees(tmp_path, fake_cache_bin,
+                                                       nested, include_worktrees):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+    parent = repo / "tmp" / "container" if nested else repo / "tmp"
+    parent.mkdir(exist_ok=True)
+    moved = parent / "locked-wt"
+    git(repo, "worktree", "move", str(unmerged), str(moved))
+    git(repo, "worktree", "lock", "--reason", "active worker", str(moved))
+    (moved / "scratch.txt").write_bytes(b"must survive\x00\xff")
+    cache = moved / "__pycache__"
+    cache.mkdir()
+    (cache / "work.pyc").write_bytes(b"locked cache")
+    args = ["--include-worktrees"] if include_worktrees else []
+    assert run_cleanup(repo, *args, pathdir=bindir).returncode == 0
+    result = run_cleanup(repo, "--apply", *args, pathdir=bindir)
+    assert result.returncode == 0, result.stderr
+    assert (moved / "scratch.txt").read_bytes() == b"must survive\x00\xff"
+    assert (cache / "work.pyc").read_bytes() == b"locked cache"
+    assert "locked active worker" in git(repo, "worktree", "list", "--porcelain").stdout
+    if include_worktrees:
+        assert "kept: locked" in result.stdout
+    assert not (repo / "tmp" / "junk.bin").exists()
+
+
+def test_generic_parent_cannot_delete_archive_failed_worktree(tmp_path, fake_cache_bin):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+    parent = repo / "tmp" / "container"
+    parent.mkdir()
+    moved = parent / "nested-wt"
+    git(repo, "worktree", "move", str(unmerged), str(moved))
+    (moved / "scratch.txt").write_bytes(b"unsaved\x00\xff")
+    (repo / "runs" / "archive" / "nested-wt.untracked.tar.gz").mkdir(parents=True)
+    assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
+    result = run_cleanup(repo, "--apply", "--include-worktrees", pathdir=bindir)
+    assert result.returncode == 1
+    assert "kept: archive failed" in result.stdout
+    assert (moved / "scratch.txt").read_bytes() == b"unsaved\x00\xff"
+    assert str(moved) in git(repo, "worktree", "list", "--porcelain").stdout
+
+
+@pytest.mark.parametrize("failed_command", ["status", "rev-list", "diff", "format-patch", "ls-files"])
+def test_failed_archive_git_read_keeps_worktree(tmp_path, fake_cache_bin, monkeypatch,
+                                               failed_command):
+    bindir, _ = fake_cache_bin
+    repo, _, unmerged = build_repo(tmp_path)
+    (unmerged / "scratch.txt").write_text("unsaved notes\n")
+    spec = importlib.util.spec_from_file_location("cleanup", SCRIPT)
+    cleanup = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cleanup)
+    real_git = cleanup.git
+
+    def failing_git(cwd, *args, **kwargs):
+        if args[0] == failed_command:
+            raise subprocess.CalledProcessError(128, ["git", *args], stderr="read failed")
+        return real_git(cwd, *args, **kwargs)
+
+    monkeypatch.setenv("PATH", str(bindir) + os.pathsep + os.environ["PATH"])
+    assert cleanup.main(["--repo", str(repo), "--include-worktrees"]) == 0
+    monkeypatch.setattr(cleanup, "git", failing_git)
+    assert cleanup.main(["--repo", str(repo), "--apply", "--include-worktrees"]) == 1
+    assert unmerged.exists()
+    assert (unmerged / "scratch.txt").read_text() == "unsaved notes\n"
+    assert "kept: archive failed" in (repo / "PROGRESS.md").read_text()
+
+
+def test_corrupt_worktree_kept_others_continue(tmp_path, fake_cache_bin):
     bindir, _ = fake_cache_bin
     repo, merged, unmerged = build_repo(tmp_path)
-    # A bogus .git file makes `git worktree remove` fail for this worktree only.
+    # A bogus .git file must stop archival/removal for this worktree only.
     (unmerged / ".git").write_text("garbage\n")
 
     assert run_cleanup(repo, "--include-worktrees", pathdir=bindir).returncode == 0
@@ -313,7 +384,7 @@ def test_removal_failure_recorded_others_continue(tmp_path, fake_cache_bin):
     assert not merged.exists()
     progress = (repo / "PROGRESS.md").read_text()
     assert "### Cleanup applied" in progress
-    assert "wt_unmerged" in progress and "FAILED" in progress
+    assert "wt_unmerged" in progress and "kept: archive failed" in progress
     assert "wt_merged" in progress and "removed" in progress
 
 

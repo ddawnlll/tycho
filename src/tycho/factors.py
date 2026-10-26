@@ -38,7 +38,7 @@ def compute_factors(snapshot, factors, ewma_convention) -> FactorFrame:
             if name in _MA_PERIODS:
                 k = _MA_PERIODS[name]
                 values.loc[iid, name] = (
-                    float(closes.tail(k).mean()) if len(closes) >= k else np.nan
+                    float(closes.tail(k).mean(skipna=False)) if len(closes) >= k else np.nan
                 )
             elif name == "close":
                 values.loc[iid, name] = float(closes.iloc[-1]) if len(closes) else np.nan
@@ -107,7 +107,7 @@ def _returns(closes, convention) -> pd.Series:
     closes = pd.Series(closes, dtype=float).reset_index(drop=True)
     if convention["returns"] == "log":
         return np.log(closes).diff()
-    return closes.pct_change()
+    return closes.pct_change(fill_method=None)
 
 
 def _ewma(values: pd.Series, convention) -> pd.Series:

@@ -60,6 +60,8 @@ def worktrees(repo):
             entries.append({"path": line[len("worktree "):], "branch": None})
         elif line.startswith("branch ") and entries:
             entries[-1]["branch"] = line[len("branch "):].removeprefix("refs/heads/")
+        elif line.startswith("locked") and entries:
+            entries[-1]["locked"] = True
     return entries
 
 
@@ -86,9 +88,19 @@ def protected_text(repo, path):
 
 def scan(repo, include_worktrees):
     found = []
+    linked = [wt for wt in worktrees(repo)
+              if os.path.realpath(wt["path"]) != os.path.realpath(repo)]
+    linked_paths = [Path(os.path.realpath(wt["path"])) for wt in linked]
 
-    def add(path, kind, branch=None):
-        found.append({"path": path, "kind": kind, "branch": branch})
+    def add(path, kind, branch=None, locked=False):
+        resolved = Path(os.path.realpath(path))
+        # Generic cleanup must not bypass worktree locks or archival checks.
+        if kind != "worktree" and any(
+            resolved == wt or resolved in wt.parents or wt in resolved.parents
+            for wt in linked_paths
+        ):
+            return
+        found.append({"path": path, "kind": kind, "branch": branch, "locked": locked})
 
     for root, dirs, _ in os.walk(repo):
         for name in list(dirs):
@@ -124,12 +136,12 @@ def scan(repo, include_worktrees):
 
     if include_worktrees:
         # Filter by path, not list position: the main worktree is the one at --repo.
-        for wt in worktrees(repo):
+        for wt in linked:
             if os.path.islink(wt["path"]):
                 continue
             p = os.path.realpath(wt["path"])
             if p != os.path.realpath(repo) and os.path.isdir(p):
-                add(p, "worktree", wt["branch"])
+                add(p, "worktree", wt["branch"], wt.get("locked", False))
 
     seen, out = set(), []
     for c in found:
@@ -176,22 +188,20 @@ def archive_worktree(repo, entry, base):
     """
     wt = Path(entry["path"])
     branch = entry["branch"]
-    status = git(wt, "status", "--porcelain", check=False).stdout.strip()
+    status = git(wt, "status", "--porcelain").stdout.strip()
     unmerged = ""
     if branch and base:
-        rev = git(repo, "rev-list", f"{base}..{branch}", check=False)
-        if rev.returncode == 0:
-            unmerged = rev.stdout.strip()
+        unmerged = git(repo, "rev-list", f"{base}..{branch}").stdout.strip()
     patch = untracked = None
     if status or unmerged:
-        parts = [git(wt, "diff", "HEAD", check=False).stdout]
+        parts = [git(wt, "diff", "HEAD").stdout]
         if branch and base:
-            parts.append(git(wt, "format-patch", "--stdout", f"{base}..{branch}", check=False).stdout)
+            parts.append(git(wt, "format-patch", "--stdout", f"{base}..{branch}").stdout)
         patch = repo / "runs" / "archive" / (wt.name + ".patch")
         patch.parent.mkdir(parents=True, exist_ok=True)
         patch.write_text("\n".join(parts), encoding="utf-8")
     others = [o for o in git(wt, "ls-files", "--others", "--exclude-standard",
-                             "-z", check=False).stdout.split("\0") if o]
+                             "-z").stdout.split("\0") if o]
     if others:
         untracked = repo / "runs" / "archive" / (wt.name + ".untracked.tar.gz")
         untracked.parent.mkdir(parents=True, exist_ok=True)
@@ -265,6 +275,9 @@ def main(argv=None):
     failures = 0
     for c in found:
         if c["kind"] == "worktree":
+            if c["locked"]:
+                lines.append(f"- worktree `{shown(repo, c['path'])}` kept: locked")
+                continue
             # Without a base branch, only commits reachable from HEAD are provably merged.
             if base is None:
                 reach = git(c["path"], "rev-list", "HEAD", "--not", head, check=False) if head else None
@@ -275,11 +288,11 @@ def main(argv=None):
                     continue
             try:
                 patch, untracked = archive_worktree(repo, c, base)
-            except (OSError, tarfile.TarError) as exc:
+            except (OSError, tarfile.TarError, subprocess.CalledProcessError) as exc:
                 failures += 1
                 lines.append(f"- worktree `{shown(repo, c['path'])}` kept: archive failed: {exc}")
                 continue
-            done = git(repo, "worktree", "remove", "--force", "--force", c["path"], check=False)
+            done = git(repo, "worktree", "remove", "--force", c["path"], check=False)
             if done.returncode != 0:
                 failures += 1
                 lines.append(f"- worktree `{shown(repo, c['path'])}` FAILED: {done.stderr.strip()}")

@@ -6,6 +6,7 @@ import pandas as pd
 from .factors import _ANNUALIZATION_DAYS, _ewma, _returns, _validate
 from .marketstate import _utc
 from .portfolio import target_weights
+from .tape import _visible
 
 
 def universe_panel(provider, dates) -> pd.DataFrame:
@@ -22,43 +23,50 @@ def universe_panel(provider, dates) -> pd.DataFrame:
     )
 
 
-def trend_panels(tape, ma_periods, ewma_convention) -> dict:
-    """Full-history close, trend score and EWMA vol at every bar close date."""
+def trend_panels(tape, ma_periods, ewma_convention, *, decision_lag) -> dict:
+    """PIT close, score and vol, indexed by bar close; as_of is the decision clock."""
     convention = _validate(ewma_convention)
-    # Anchor at the tape end: a bar stamped at t is known at t + available lag,
-    # and every row reads only bars stamped at or before its own date.
-    # shortcut: a revision that lands days after its bar stamp is applied from the
-    # stamp row, so rows before its available_at are not PIT-exact
-    view = tape.as_of(tape.bars_1d["available_at"].max())
-    bars = view.bars_1d.sort_values(["instrument_id", "event_time"], kind="stable")
-    # rolling/ewm per instrument keep the bar-count semantics of compute_factors
-    for k in ma_periods:
-        bars[f"ma_{k}"] = bars.groupby("instrument_id", sort=False)["close"].transform(
-            lambda closes, k=k: closes.rolling(k).mean()
+    lag = pd.Timedelta(decision_lag)
+    # shortcut: daily row labels support lag <= 1D, use explicit schedules for longer lags
+    if pd.isna(lag) or not pd.Timedelta(0) < lag <= pd.Timedelta(days=1):
+        raise ValueError("decision_lag must be positive and at most one day")
+    source = tape.bars_1d
+    dates = pd.DatetimeIndex(source["event_time"].unique(), name="event_time").sort_values()
+    instruments = pd.Index(sorted(source["instrument_id"].unique()), name="instrument_id")
+    panels = {
+        name: pd.DataFrame(np.nan, index=dates, columns=instruments)
+        for name in ("close", "score", "vol")
+    }
+    panels["as_of"] = pd.Series(dates + lag, index=dates)
+    for date, as_of in panels["as_of"].items():
+        # Recompute from the visible revisions: correcting an old close changes
+        # subsequent returns and EWMA state, never previously emitted rows.
+        bars = _visible(source, as_of)
+        bars = bars[bars["event_time"] < as_of].sort_values(
+            ["instrument_id", "event_time"], kind="stable"
         )
-    bars["ewma_vol"] = bars.groupby("instrument_id", sort=False)["close"].transform(
-        lambda closes: _vol_series(closes, convention)
-    )
-
-    def wide(column):
-        return bars.pivot(
-            index="event_time", columns="instrument_id", values=column
-        ).sort_index()
-
-    panels = {"close": wide("close")}
-    signs = [np.sign(panels["close"] / wide(f"ma_{k}") - 1.0) for k in ma_periods]
-    # any undefined MA turns its sign into NaN, and the mean into NaN
-    panels["score"] = sum(signs) / len(signs)
-    panels["vol"] = wide("ewma_vol")
+        for iid, group in bars.groupby("instrument_id", sort=False):
+            current = group[group["event_time"] == date]
+            if current.empty:
+                continue
+            closes = group["close"]
+            close = float(current["close"].iloc[-1])
+            mas = [
+                closes.tail(k).mean(skipna=False) if len(closes) >= k else np.nan
+                for k in ma_periods
+            ]
+            panels["close"].at[date, iid] = close
+            panels["score"].at[date, iid] = np.mean(np.sign(close / np.asarray(mas) - 1.0))
+            panels["vol"].at[date, iid] = _vol_series(closes, convention)[-1]
     return panels
 
 
 def weights_panel(
-    panels, universe, cov_fn, target_vol, rho, n, vol_cap_multiple, gross_cap
+    panels, universe, cov_fn, target_vol, rho, n, vol_cap_multiple, gross_cap, *, on_abstain
 ) -> pd.DataFrame:
-    """One target_weights call per date; non-members and NaN scores get weight 0.
+    """One target_weights call per date; the caller chooses the ABSTAIN policy.
 
-    cov_fn(date, instruments) returns the covariance over the instruments that
+    cov_fn(as_of, instruments) returns the covariance over the instruments that
     the row's non-zero scores make active.
     """
     score = panels["score"]
@@ -69,17 +77,19 @@ def weights_panel(
     ).astype(bool)
     rows = {}
     for date in score.index:
-        scores = score.loc[date].where(member.loc[date], 0.0).fillna(0.0)
-        active = list(scores.index[scores != 0.0])
+        scores = score.loc[date].where(member.loc[date], 0.0)
+        vols = vol.loc[date]
+        active = list(scores.index[scores.notna() & (scores != 0.0) & vols.notna() & (vols > 0)])
         weights, _ = target_weights(
             scores,
-            vol.loc[date],
-            cov_fn(date, active),
+            vols,
+            cov_fn(panels["as_of"].loc[date], active),
             target_vol,
             rho,
             n,
             vol_cap_multiple,
             gross_cap,
+            on_abstain=on_abstain,
         )
         rows[date] = weights
     return pd.DataFrame.from_dict(rows, orient="index", columns=instruments)

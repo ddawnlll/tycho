@@ -75,6 +75,15 @@ Markers: `[x]` acceptance test passes · `[ ]` open · `[CANCELLED owner 2026-10
 
 ## 5. Dependency order
 
+### Autonomous DEV completion — 2026-10-25
+
+Starting main: `92d89e3f6f922aa81bbaeed954a3276e169aa481` (T5.2 already merged; #29 closed).
+Wave 1: #43 (slot A), genuinely blind #35 (slot B), #28 (slot C), coordinator verification/reconciliation (slot D).
+Then follow `docs/dispatch-plan.md`: independent verification before closure, exact acceptance and full suite on integrated main, one PR per task, PLAN/PROGRESS updated together after each merge.
+No Modal execution: skill/PLAN prohibit it and the budget is owner-only; small synthetic checks stay local. Undefined scientific rules remain BLOCKED, never guessed.
+Owner decisions discovered: #45 (zero-crossing policy), #46 (null/baseline preservation rules). Public scanner interface supplied in `docs/scanner-interface.md` for blind-worker request #47.
+Additional blockers: #51 (1h execution tape), #52 (manifest text/registry conflict), #53 (cost-bearing exact scanner parity). V0/V1/V4 fixes: #48/#58, #49, #50. #30 implementation is in PR #54 with closed-bar review fix #56; no unchecked item is marked complete.
+
 ```text
 M0 T0.5 ─► V0
 M1 (done) ─► V1
@@ -132,7 +141,8 @@ Package, config with PENDING kept, guard hook, cleanup script. Open: 2/7.
   M0 verifier found heuristic bypasses. The guard protects itself, so only the owner can change it. Owner cancelled 2026-10-25; known residual risk.
 - [CANCELLED owner 2026-10-25] **X0.b** OS-level lock of guard, golden and prereg (chattr +i / separate user / branch protection) — [#6](https://github.com/ddawnlll/tycho/issues/6) · BLOCKED  
   Monograph wants separate credentials for the protected judge. Owner cancelled 2026-10-25; the hook stays a heuristic guard.
-- [ ] **V0** M0 verifier re-run after T0.5 — [#7](https://github.com/ddawnlll/tycho/issues/7) · verifier
+- [x] **T0.6 / T0.7** Preserve locked/archival-failed worktrees, including generic-directory overlaps — #48 / #58, commits `74fe1ef` / `8c69f50`. Independent Astra PASS (12 adversarial probes); integrated acceptance: 21 passed; full suite: 196 passed.
+- [x] **V0** M0 verifier re-run after T0.5 — [#7](https://github.com/ddawnlll/tycho/issues/7) · verifier
   - **Goal:** First run (wf_4e6413d1-3f8) = FAIL → T0.5. Re-verify cleanup.py after the fixes. Guard bypasses are a known, owner-cancelled residual risk — do not re-report them.
   - **Read in the monograph:**
     - CLAUDE.md protected set
@@ -164,7 +174,8 @@ Tape schema, PIT loader, synthetic tape, G0 data audit. No returns, no Sharpe. O
   Acceptance: `uv run pytest -q tests/test_feasibility.py tests/test_tape.py`
 - [CANCELLED owner 2026-10-25] **X1.a** G0 run on real Binance data — [#10](https://github.com/ddawnlll/tycho/issues/10) · BLOCKED  
   Needs dev_end_date [OWNER] and G0 sufficiency thresholds (PENDING). Owner cancelled 2026-10-25.
-- [ ] **V1** M1 verifier (G0 tape + audit) — [#11](https://github.com/ddawnlll/tycho/issues/11) · verifier
+- [x] **T1.4** Reject invalid/non-finite G0 thresholds — #49, `6fb1f20`; independent Astra PASS, integrated acceptance 89 passed, full suite 252 passed.
+- [x] **V1** M1 verifier (G0 tape + audit) — [#11](https://github.com/ddawnlll/tycho/issues/11) · verifier
   - **Goal:** The first M1 verifier run was interrupted by /exit and the re-run result is not recorded. Verify T1.1/T1.2 from a clean context.
   - **Read in the monograph:**
     - §08A.2 tape contract; §14 G0 scope; registry `feasibility.data.prohibited`
@@ -297,7 +308,8 @@ Trend Expert signal, C-04/C-05 sizing and caps, window-equality core rule. Open:
   - **PENDING / BLOCKED:** Binding live window length → BLOCKED (X3.a). ewma_convention → test fixture value, clearly marked synthetic.
   - **Out of scope:** Choosing a binding window length; editing config.
   - **Depends on:** T3.1 [#16](https://github.com/ddawnlll/tycho/issues/16), T3.2 [#17](https://github.com/ddawnlll/tycho/issues/17)
-- [ ] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43)
+- [x] **T3.4** M3 verifier fixes: PIT leak in trend_panels, cov timing, NaN close, on_abstain — [#43](https://github.com/ddawnlll/tycho/issues/43), `d829405`; independent Astra PASS for all five findings, integrated acceptance 39 passed / full suite 271 passed.
+- [ ] **T3.5** Delayed-current-bar readiness must agree between panel and snapshot — #61 (new independent V3 finding; ahead of dependent replay work).
   - **Goal:** Close the M3 verifier findings (wf_4bf0a3cb-a4f); the blocker is a point-in-time leak in the vectorized full-history path.
   - **Contract:** (1) blocker: `vectorized.trend_panels` builds from the end-of-tape view, so later revisions leak into earlier rows; (2) cov evaluated one bar before the decision time — add a test where the vol cap binds; (3) NaN latest close must ABSTAIN, not fall back; (4) `on_abstain` required argument, no default; (5) same MA NaN handling in panel and snapshot paths.
   - **Acceptance:** `uv run pytest -q tests/test_window_equality.py tests/test_portfolio.py tests/test_exp_trend.py`

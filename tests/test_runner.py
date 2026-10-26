@@ -13,6 +13,8 @@ from tycho.trials import verify_chain
 # Synthetic test parameters only: every monograph PENDING value stays PENDING.
 PARAMS = {
     "ewma_convention": {"kind": "span", "value": 60, "returns": "log", "min_periods": 20},
+    "decision_lag": "1min",
+    "on_abstain": "flat",
     "max_staleness": "2D",
     "absolute_band_nav": 0.01,
     "partial_ratio": 1.0,
@@ -64,8 +66,9 @@ def test_trial_log_gets_two_chained_records(result):
     assert all(line["git_head"] for line in lines)
 
 
-def test_missing_pending_parameter_is_refused(tape, tmp_path):
-    params = {key: value for key, value in PARAMS.items() if key != "absolute_band_nav"}
+@pytest.mark.parametrize("missing", ["absolute_band_nav", "decision_lag", "on_abstain"])
+def test_missing_pending_parameter_is_refused(tape, tmp_path, missing):
+    params = {key: value for key, value in PARAMS.items() if key != missing}
     params["trials_path"] = str(tmp_path / "trials.jsonl")
     with pytest.raises(config.PendingParameterError):
         run_e001(tape, params, synthetic=True)

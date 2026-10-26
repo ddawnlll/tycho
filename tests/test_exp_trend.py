@@ -143,6 +143,21 @@ def test_abstain_on_nan_close(expert):
     assert signal.abstain_reason == "nan_close"
 
 
+def test_latest_nan_close_does_not_reuse_previous_signal(expert):
+    closes = {"AAA": 110.0}
+    mas = {"AAA": dict.fromkeys(MA_NAMES, 100.0)}
+    snapshot = make_snapshot(closes)
+    latest = snapshot.bars.copy()
+    latest["event_time"] = AS_OF - pd.Timedelta(hours=1)
+    latest["close"] = np.nan
+    # Unsorted input must still select the latest actual row, including its NaN.
+    snapshot = replace(snapshot, bars=pd.concat([latest, snapshot.bars], ignore_index=True))
+    signal = signal_for(expert, snapshot, make_frame(closes, mas), "AAA")
+    assert signal.direction == "ABSTAIN"
+    assert signal.score is None
+    assert signal.abstain_reason == "nan_close"
+
+
 def test_one_signal_per_universe_instrument(expert):
     closes = {"AAA": 110.0, "BBB": 90.0, "CCC": 100.0}
     mas = {
